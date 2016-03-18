@@ -23,11 +23,11 @@
    :root  fundamental
    :words {}})
 
-;; (defn add-room! [room-name & user-names]
-;;   (do (swap! *site*
-;;              (fn [m] (assoc m room-name
-;;                             (make-room room-name ))))
-;;       (get-room room-name)))
+(defn add-room! [room-name & user-names]
+  (let [new-fund (next-tenney-layer (:fundamental *site*))]
+    (do (swap! *site*
+               #(assoc % room-name (make-room room-name new-fund user-names)))
+        (get-room room-name))))
 
 ;; TENNEY CRYSTALZZZ
 ;; pitches are represented as n-dimensional coordinates
@@ -69,21 +69,12 @@
   [current-crystal]
   (map stepwise-per-point current-crystal))
 
-(defn next-coord [fundamental used-pitches dimensions]
+(defn next-coord [fundamental used-pitches]
   (if-not (first used-pitches) ; if the list is empty
     fundamental
-    (let [layer (next-tenney-layer used-pitches dimensions)]
+    (let [layer (next-tenney-layer used-pitches)]
       (->> layer
            (total-m-distances used-pitches)
            (zipmap layer)
            (sort-by second)
            first))))
-
-
-(comment
-  (let [starts [[0 1] [1 1] [2 3]]
-        ends   [[1 1] [2 1] [3 2]]]
-    (->> ends
-         (total-m-distances starts)
-         (zipmap ends)))
-  )

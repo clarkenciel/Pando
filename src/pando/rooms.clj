@@ -1,4 +1,4 @@
-(ns chat.rooms)
+(ns pando.rooms)
 
 ;; the site - fundamental is G3
 (def ^:dynamic *site*

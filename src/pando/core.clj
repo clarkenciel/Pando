@@ -1,7 +1,7 @@
 ;;; This is a very good example for what I'm trying to do
 ;;; Should try for a mock-up tomorrow
 
-(ns chat.core
+(ns pando.core
   (:use
    (ring.middleware resource file-info)
    [chat.templates])

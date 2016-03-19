@@ -1,4 +1,4 @@
-(ns chat.templates
+(ns pando.templates
   (:use (hiccup core page)))
 
 (defn normal-client

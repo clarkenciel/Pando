@@ -1,6 +1,5 @@
-(defproject chat "0.1.0-SNAPSHOT"
-  :description "FIXME: write description"
-  :url "http://example.com/FIXME"
+(defproject pando "0.1.0-SNAPSHOT"
+  :description "Distributed, chat-based installation."
   :license {:name "Eclipse Public License"
             :url "http://www.eclipse.org/legal/epl-v10.html"}
   :dependencies [[org.clojure/clojure "1.7.0"]
@@ -9,4 +8,5 @@
                  [gloss "0.2.5"]     ; conversion to/from bytes
                  [compojure "1.5.0"] ; http routing
                  [org.clojure/core.async "0.2.374"]
-                 [hiccup "1.0.5"]])
+                 [hiccup "1.0.5"]]
+  )

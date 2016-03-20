@@ -4,7 +4,7 @@
 (ns pando.core
   (:use
    (ring.middleware resource file-info)
-   [chat.templates])
+   [pando.templates])
   (:require
     [compojure.core :as compojure :refer [GET POST]]
     [ring.middleware.params :as params]
@@ -19,6 +19,11 @@
 
 ;; event bus, usable with publish! and subscribe
 (def chatrooms (bus/event-bus))
+
+(def non-websocket-request
+  {:status 400
+   :headers {"content-type" "application/text"}
+   :body "Expected a websocket request."})
 
 (defn chat-handler [{:keys [params] :as req}]
   (println "chat-hanlder:" req)
@@ -99,8 +104,6 @@
    (compojure/routes
     (GET "/:id" [id] (str id))
     (GET "/" [] home-handler)
-    
-    (GET "/echo" [] echo-handler)
     (GET "/chat/:room" [room :as r] chat-handler)
     (POST "/join" [] join-handler)
     (route/not-found "No such page."))))

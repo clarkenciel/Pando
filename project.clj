@@ -9,5 +9,4 @@
                  [compojure "1.5.0"] ; http routing
                  [org.clojure/core.async "0.2.374"]
                  [hiccup "1.0.5"]]
-  :test-path "test/pando"
-  )
+  :test-path "test/pando")

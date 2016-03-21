@@ -26,7 +26,6 @@
    :body "Expected a websocket request."})
 
 (defn chat-handler [{:keys [params] :as req}]
-  (println "chat-hanlder:" req)
   (d/let-flow [conn (d/catch
                         (http/websocket-connection req)
                         (fn [_] nil))]

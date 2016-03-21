@@ -2,20 +2,20 @@
 ;;; Should try for a mock-up tomorrow
 
 (ns pando.core
-  (:use
-   (ring.middleware resource file-info)
-   [pando.templates])
   (:require
-    [compojure.core :as compojure :refer [GET POST]]
-    [ring.middleware.params :as params]
-    [ring.util.response :as response]
-    [compojure.route :as route]
-    [aleph.http :as http]
-    [byte-streams :as bs]
-    [manifold.stream :as s]
-    [manifold.deferred :as d]
-    [manifold.bus :as bus]
-    [clojure.core.async :as a]))
+   [compojure.core :as compojure :refer [GET POST]]
+   [ring.middleware.params :as params]
+   [ring.middleware.resource :as resource]
+   [ring.middleware.file-info :as file-info]
+   [ring.util.response :as response]
+   [compojure.route :as route]
+   [aleph.http :as http]
+   [byte-streams :as bs]
+   [manifold.stream :as s]
+   [manifold.deferred :as d]
+   [manifold.bus :as bus]
+   [clojure.core.async :as a]
+   [pando.templates :as templates]))
 
 ;; event bus, usable with publish! and subscribe
 (def chatrooms (bus/event-bus))

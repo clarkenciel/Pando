@@ -58,7 +58,9 @@
   given a fundamental and set of 'dimensions,' which represent
   partials over the fundamental."
   [fundamental dimensions coord]
-  (let [rat (reduce (fn [acc [dim cval]] (* acc (Math/pow dim cval)))
-                       1
-                       (zipmap dimensions coord))]
-    (Math/abs (* fundamental rat))))
+  (let [rat (reduce
+             (fn [[dim1 cval1] [dim2 cval2]]
+               (* (Math/pow dim1 cval1)
+                  (Math/pow dim2 cval2)))
+             (zipmap dimensions coord))]
+    (float (Math/abs (* fundamental rat)))))

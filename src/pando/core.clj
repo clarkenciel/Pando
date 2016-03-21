@@ -94,7 +94,7 @@
 
 (defn home-handler [{:keys [params] :as req}]
   {:status 200
-   :headers {"content-type" "text/html" }
+   :headers {"content-type" "text/html"}
    :body (page join-form
                (errors (or (flush-errors!) "")))})
 

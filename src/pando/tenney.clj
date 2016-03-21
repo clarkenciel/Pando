@@ -34,28 +34,44 @@
   to-coll and all points in from-coll"
   [from-coll to-coll]
   (->> (manhattan-distances from-coll to-coll)
-       (partition-all (count to-coll))
+       (partition-all (count from-coll))
        (map #(apply + %))))
+
+(defn filter-diagonals [pts]
+  (filter (fn [[x & xs]]
+            (not (every?
+                  #(= (Math/abs %)
+                      (Math/abs x))
+                  xs)))
+          pts))
+
+(defn filter-duplicates [coll pts]
+  (filter (fn [pt] (not (some #{pt} coll)))
+          pts))
 
 (defn next-tenney-layer
   "Generate a layer of coordinates according to Tenney's algorithm.
   NB: ASSUMES 2 DIMENSIONS FOR NOW."
   [current-crystal]
   (->> current-crystal
-       (map stepwise-per-point)
-       (filter #(some (set %) current-crystal))           ; no pre-existing points
-       (filter (fn [pt] (every? #(= % (first pt)) pt))))) ; no identity, or diagonals
+       (mapcat stepwise-per-point)
+       filter-diagonals
+       (filter-duplicates current-crystal)))
 
-(defn next-coord [fundamental used-pitches]
-  (if-not (first used-pitches) ; if the list is empty
-    fundamental
-    (let [layer (next-tenney-layer used-pitches)]
-      (->> layer
-           (total-m-distances used-pitches)
-           (zipmap layer)
-           (sort-by second)
-           first     ; get closest
-           first)))) ; get coord
+(defn next-coord [used-pitches]
+  (let [layer (next-tenney-layer used-pitches)]
+    (->> layer
+         (total-m-distances used-pitches)
+         (zipmap layer)
+         (sort-by second)
+         first    ; get closest
+         first))) ; get coord
+
+(def memo-next-coord (memoize next-coord))
+
+(def crystal-iter (iterate #(conj % (next-coord %)) [[0 0]]))
+
+(def memo-crystal-iter (iterate #(conj % (memo-next-coord %)) [[0 0]]))
 
 (defn coord->freq
   "Convert a coordinate in a Tenney Crystal into a frequency,

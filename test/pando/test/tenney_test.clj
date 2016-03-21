@@ -51,16 +51,28 @@
           rslts (take 12 (repeat 2))]
       (is (= dists rslts))))
 
-  (testing "manhattan distance totals"
+  (testing "manhattan distance same-length totals"
     (let [coll1 [[0 0] [ 0  0] [0  0] [ 0 0]]
           coll2 [[1 1] [-1 -1] [1 -1] [-1 1]]
           dists (total-m-distances coll1 coll2)
           rslts (take 4 (repeat 8))]
+      (is (= dists rslts))))
+
+  (testing "manhattan distance different-length totals"
+    (let [coll1 [[0 0] [ 0  0] [0  0]]
+          coll2 [[1 1] [-1 -1] [1 -1] [-1 1]]
+          dists (total-m-distances coll1 coll2)
+          rslts (take 4 (repeat 6))]
       (is (= dists rslts)))))
 
 (deftest test-tenney-crystal
   (testing "generating tenney-layer"
-    (is (= 0 1) "implement me!"))
+    (let [start  [[0 0]]
+          layers (next-tenney-layer start)]
+      (is (= '([-1 0] [0 -1] [0 1] [1 0])
+             layers))))
 
   (testing "generating next coordinate"
-    (is (= 0 1) "implement me!")))
+    (let [start [[0 0]]
+          next (next-coord start)]
+      (is (= [-1 0] next)))))

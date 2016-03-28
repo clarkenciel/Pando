@@ -15,56 +15,42 @@
    [clojure.core.async :as a]
    [pando.templates :as templates]
    [pando.rooms :as rooms]
-   [pando.site :as site]
-   [pando.tenney :as tenney]))
+   [pando.site :as site]))
 
-;; event bus, usable with publish! and subscribe
+;;; SITE
+(def site (atom (site/make-site "Pando" 49.00 [3 5]))) ; tune to G1
 (def chatrooms (bus/event-bus))
-(def site (atom (site/make-site "Pando" 49.00))) ; tune to G1
-(def error-log (atom []))
+
+;;; VALIDATION
 
 (defn is-observer? [user-name]
   (= (clojure.string/lower-case user-name)
      "observer"))
 
-(def non-websocket-request
+(defn invalid-signup [room name]
+  (or (>= 0 (count name))
+      (>= 0 (count room))))
+
+;;; RESPONSES
+
+(def non-websocket-response
   {:status 400
    :headers {"content-type" "application/text"}
    :body "Expected a websocket request."})
 
-(defn message-handler [{:keys [params] :as req}]
-  (d/let-flow [conn (d/catch
-                        (http/websocket-connection req)
-                        (fn [_] nil))]
-    (if-not conn
-      non-websocket-request
-      (d/let-flow [room (:room params)
-                   name (s/take! conn)]
-        ;; create a stream that consumes all messages from
-        ;; the room and connect it to the websocket connection
-        (s/connect (bus/subscribe chatrooms room) conn)
-        
-        ;; apply the publish! callback to the buffered stream
-        ;; containing strings with messages. I.e, consume the stream
-        ;; by publishing its messages to the room in chatrooms
-        (s/consume #(bus/publish! chatrooms room %)
-                   (->> conn
-                        (s/map #(str name ": " %))
-                        (s/buffer 100)))))))
+(defn success-response [body]
+  {:status 200
+   :headers {"content-type" "text/html"}
+   :body body})
 
-(defn chat-handler [room {{:keys [user-name room-name]} :session}]
-  (if (or (is-observer? user-name)
-          (rooms/user-exists? (site/get-room @site room-name) user-name))
-    {:status 200
-     :headers {"content-type" "text/html"}
-     :body (if (is-observer? user-name)
-             (templates/page (templates/normal-client room-name user-name))
-             (templates/page (templates/admin-client room-name)))}
-    {:status 403
-     :headers {"content-type" "text/html"}
-     :body "You do not have permission to view this chat"}))
+(defn no-permission-response [body]
+  {:status 403
+   :headers {"content-type" "text/html"}
+   :body body})
 
-;; joining
+;;; ERROR QUEUE
+
+(def error-log (atom []))
 
 (defn push-errors! [& es]
   (swap! error-log (fn [eq] (concat eq es))))
@@ -75,57 +61,114 @@
     (when (< 0 (count out))
       out)))
 
-(defn invalid-signup [room name]
-  (or (>= 0 (count name))
-      (>= 0 (count room))))
-
-(defn get-user-list [s room-name]
-  (get-in s [:rooms room-name :users]))
-
-(defn modify-user-list! [site room-name f]
-  (let [user-list (get-user-list site room-name)]
-    (assoc-in site [:rooms room-name :users] (f user-list))))
+;;; SITE-LEVEL ROOM AND USER MANIPULATION
 
 (defn add-user! [room-name user-name]
   (swap! site
          (fn [s]
-           (modify-user-list! s room-name #(conj % user-name)))))
+           (site/modify-room
+            s room-name #(rooms/add-user % user-name)))))
 
 (defn remove-user! [room-name user-name]
   (swap! site
          (fn [s]
-           (modify-user-list! s room-name #(set (remove #{user-name} %))))))
+           (site/modify-room
+            s room-name #(rooms/remove-user % user-name)))))
+
+(defn add-room! [room-name]
+  (swap! site #(site/add-room % room-name)))
+
+(defn remove-room! [room-name]
+  (swap! site #(site/remove-room % room-name)))
+
+;;; HANDLERS
 
 (defn join-handler [{:keys [params]}]
-  (let [room (get params "room-name")
-        name (get params "user-name")]
+  (let [ps (select-keys params
+                        (keep (fn [[k v]]
+                                (when (not= v "") k))
+                              params))
+        room-name (or (get ps "new-room-name")
+                      (get ps "room-name"))
+        user-name (get ps "user-name")]
     (cond
-      (invalid-signup room name)
+      (invalid-signup room-name user-name)
       (do (push-errors! "Please enter both a name and room")
           (response/redirect "/"))
 
-      (rooms/user-exists? (site/get-room @site room) name)
+      (rooms/user-exists? (site/get-room @site room-name) user-name)
       (do (push-errors! "That name is already taken for that room")
           (response/redirect "/"))
 
       :else
       (do
-        (add-user! room name)
-        (assoc (response/redirect (str "/chat/" room))
-               :session {:user-name name
-                         :room-name room})))))
+        (when-not (site/room-exists? @site room-name)
+          (add-room! room-name))
+        (when-not (rooms/user-exists?
+                   (site/get-room @site room-name)
+                   user-name)
+          (add-user! room-name user-name))
+        (assoc (response/redirect (str "/chat/" room-name))
+               :session {:user-name user-name
+                         :room-name room-name})))))
+
+(defn chat-handler [room {{:keys [user-name room-name]} :session}]
+  (if-not (or (is-observer? user-name)
+              (rooms/user-exists? (site/get-room @site room-name) user-name))
+    (no-permission-response "You do not have permission to view this chat")
+    
+    (let [room (site/get-room @site room-name)
+          user (rooms/get-user room user-name)]
+      (success-response (if (is-observer? user-name)
+                          (templates/page (templates/admin-client
+                                           (site/get-room @site room-name)))
+                          (templates/page (templates/normal-client
+                                           room
+                                           user)))))))
+
+(defn message-handler [req
+                       ;;{:keys [params] :as req}
+                       ]
+  (println req)
+  (comment
+    ;; conn is deferred value - this will block until it can be
+    ;; computed
+    (d/let-flow [conn (d/catch
+                          (http/websocket-connection req)
+                          (fn [_] nil))]
+      (if-not conn
+        non-websocket-request
+        (d/let-flow [room (:room params)
+                     name (s/take! conn)]
+          ;; create a stream that consumes all messages from
+          ;; the room and connect it to the websocket connection
+          (s/connect (bus/subscribe chatrooms room) conn)
+          
+          ;; apply the publish! callback to the buffered stream
+          ;; containing strings with messages. I.e, consume the stream
+          ;; by publishing its messages to the room in chatrooms
+          (s/consume #(bus/publish! chatrooms room %)
+                     (->> conn
+                          (s/map #(str name ": " %))
+                          (s/buffer 100))))))))
 
 (defn leave-handler [{{:keys [user-name room-name]} :session}]
   (do
     (remove-user! room-name user-name)
+    (when (<= 0 (count (:users (site/get-room @site room-name))))
+      (remove-room! room-name))
     (assoc (response/redirect "/")
            :session nil)))
 
-(defn home-handler [{:keys [params] :as req}]
-  (let [errors (flush-errors!)]
-    {:status 200
-     :headers {"content-type" "text/html"}
-     :body (templates/page (templates/join-form) errors)}))
+(defn home-handler [{:keys [params session] :as req}]
+  (let [errors (flush-errors!)
+        user-name (:user-name session)
+        room-name (:room-name session)]
+    (if (and user-name room-name)
+      (response/redirect (str "/chat/" room-name))
+      (success-response (templates/page (templates/join-form @site) errors)))))
+
+;;; ROUTES
 
 (def routes
   (compojure/routes
@@ -133,9 +176,10 @@
    (GET "/chat/:room" [room :as req] (chat-handler room req))
    (POST "/join" [] join-handler)
    (POST "/leave" req (leave-handler req))
+   (POST "/add_message" req (message-handler req))
    (route/not-found "No such page.")))
 
-(def handler
+(def app-routes
   (-> routes
       (params/wrap-params)
       (session/wrap-session)))
@@ -143,7 +187,7 @@
 
 (comment
 
-  (def s (http/start-server handler {:port 10001}))
+  (def s (http/start-server #'app-routes {:port 10001}))
   (.close s)
 
   ;; putting and reading

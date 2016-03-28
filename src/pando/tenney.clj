@@ -59,19 +59,15 @@
        (filter-duplicates current-crystal)))
 
 (defn next-coord [used-pitches]
-  (let [layer (next-tenney-layer used-pitches)]
-    (->> layer
-         (total-m-distances used-pitches)
-         (zipmap layer)
-         (sort-by second)
-         first    ; get closest
-         first))) ; get coord
-
-(def memo-next-coord (memoize next-coord))
-
-(def crystal-iter (iterate #(conj % (next-coord %)) [[0 0]]))
-
-(def memo-crystal-iter (iterate #(conj % (memo-next-coord %)) [[0 0]]))
+  (if (= 0 (count used-pitches))
+    [0 0]
+    (let [layer (next-tenney-layer used-pitches)]
+      (->> layer
+           (total-m-distances used-pitches)
+           (zipmap layer)
+           (sort-by second)
+           first    ; get closest
+           first)))) ; get coord
 
 (defn coord->freq
   "Convert a coordinate in a Tenney Crystal into a frequency,
@@ -79,8 +75,10 @@
   partials over the fundamental."
   [fundamental dimensions coord]
   (let [rat (reduce
-             (fn [[dim1 cval1] [dim2 cval2]]
+             (fn [[dim1 cval1] [dim2 cval2]]               
                (* (Math/pow dim1 cval1)
                   (Math/pow dim2 cval2)))
              (zipmap dimensions coord))]
     (Math/abs (* fundamental rat))))
+
+(def memo-next-coord (memoize next-coord))

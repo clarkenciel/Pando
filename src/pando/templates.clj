@@ -3,23 +3,29 @@
             [hiccup.page :as p]
             [hiccup.form :as f]))
 
+(defn invisible-field [name val]
+  (f/text-field {:style "display:none;"} name val))
+
 (defn post-form
-  [room-name user-name]
+  [{:keys [name root]} user-name]
   (f/form-to [:post "/add_message"]
              [:div.form-group
-              (f/text-field {:style "display:none;"} "user-name" user-name)
+              (invisible-field "user-name" user-name)
+              (invisible-field "room-name" name)
               (f/label {} "message" "Message:")
               (f/text-area {:id "message-area"
-                            :placeholder "Enter a message..."} "message")
-              (f/submit-button {:id "message-submit"} "Send")]))
+                            :placeholder "Enter a message..."}
+                           "message")
+              [:div#message-submit.button               
+               "Send"]]))
 
-(defn post-area [room-name user-name]
+(defn post-area [room user-name]
   [:div#post-area
    [:div#post-user-name
     [:p (clojure.string/capitalize (str user-name))]]
    [:div#post-divider]
    [:div#post-entry
-    (post-form room-name user-name)]])
+    (post-form room user-name)]])
 
 
 (defn display-area [room-name]
@@ -35,10 +41,17 @@
               [:div.form-group
                (f/submit-button {:id "leave-submit"} "Leave")])])
 
+(defn format-coord [coord]
+  (str "coord: " "[" (apply str (interpose "," coord)) "]"))
+
 (defn normal-client
   "HTML for a normal client - allows for chatting, but only hears own part"
-  [room-name user-name]
-  [:div#main
+  [{room-name :name :as room} {:keys [user-name coord] :as user}]
+  (println room)
+  [:div#main {:data-bind (str
+                          "user-name: '" user-name "', "
+                          "room-name: '" room-name "', "
+                          (format-coord coord))}
    (logout)
    (display-area room-name)
    (post-area room-name user-name)
@@ -52,23 +65,35 @@
    (display-area room-name)
    (p/include-js "/static/admin.js")])
 
+(defn labeled-radio [label]
+  [:label (f/radio-button {} "room-name" false label)
+   (str "   " label "    ")])
+
 (defn join-form
   "Form for joining a room"
-  []
+  [{:keys [rooms]}]
   [:div#main
    (f/form-to [:post "/join"]
               [:div.form-group
                (f/label {:class "form-label"} "user-name" "Name: *")
+               [:br]
                (f/text-field {:id "join-user-name"
                               :class "form-field"
                               :placeholder "name"}
                              "user-name")]
+              [:br]
               [:div.form-group
                (f/label {:class "form-label"} "room-name" "Room: *")
-               (f/text-field {:id "join-room-name"
-                              :class "form-field"
-                              :placeholder "room name"}
-                             "room-name")]
+               [:br]
+               [:label
+                (f/radio-button {} "room-name" nil "")
+                (f/text-field {:id "join-room-name"
+                               :class "form-field"
+                               :placeholder "New room name"}
+                              "new-room-name")]
+               (reduce conj [:div {:class "btn-group"}]
+                       (mapv labeled-radio (keys rooms)))]
+              [:br]
               [:div.form-group
                (f/submit-button {:id "join-submit"} "Join")])])
 
@@ -84,5 +109,7 @@
   "Basic page contents"
   ([contents & error-ms]
    (h/html
-    [:head]
+    [:head
+     (p/include-js
+      "https://cdnjs.cloudflare.com/ajax/libs/knockout/3.4.0/knockout-min.js")]
     (reduce conj [:body (errors error-ms)] [contents]))))

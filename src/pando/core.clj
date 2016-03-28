@@ -1,6 +1,3 @@
-;;; This is a very good example for what I'm trying to do
-;;; Should try for a mock-up tomorrow
-
 (ns pando.core
   (:require
    [compojure.core :as compojure :refer [GET POST]]
@@ -15,7 +12,10 @@
    [manifold.deferred :as d]
    [manifold.bus :as bus]
    [clojure.core.async :as a]
-   [pando.templates :as templates]))
+   [pando.templates :as templates]
+   [pando.rooms :as rooms]
+   [pando.site :as site]
+   [pando.tenney :as tenney]))
 
 ;; event bus, usable with publish! and subscribe
 (def chatrooms (bus/event-bus))
@@ -53,35 +53,20 @@
   (swap! error-log (fn [eq] (concat eq es))))
 
 (defn flush-errors! []
-  (let [out @error-log]
+  (let [out @error-log] 
     (swap! error-log (fn [_] []))
     (when (< 0 (count out))
       out)))
 
-(def join-form
-  "<form action='/join' method='post'>
-    <input type='text' name='name' value='name'/>
-    <input type='text' name='room' value='room'/>
-    <input type='submit' value='enter'/>
-   </form>")
-
-(defn page [& contents]
-  (clojure.string/join
-   ""
-   ((comp concat flatten)
-    ["<!doctype html><html><head></head><body>"
-     contents
-     "</body></html>"])))
-
-(defn errors [& es]
-  (map #(format "<p>%s</p></br>" %) (flatten es)))
+(defn invalid-signup [room name]
+  (or (>= 0 (count name))
+      (>= 0 (count room))))
 
 (defn join-handler [{:keys [params]}]
-  (let [room (get params "room")
-        name (get params "name")]
+  (let [room (get params "room-name")
+        name (get params "user-name")]
     (cond
-      (or (>= 0 (count name))
-          (>= 0 (count room)))
+      (invalid-signup room name)
       (do (push-errors! "Please enter both a name and room")
           (response/redirect "/"))
 
@@ -93,15 +78,14 @@
       (response/redirect (str "/chat/" room))))) ; work this out
 
 (defn home-handler [{:keys [params] :as req}]
-  {:status 200
-   :headers {"content-type" "text/html"}
-   :body (page join-form
-               (errors (or (flush-errors!) "")))})
+  (let [errors (flush-errors!)]
+    {:status 200
+     :headers {"content-type" "text/html"}
+     :body (templates/page (templates/join-form) errors)}))
 
 (def handler
   (params/wrap-params
    (compojure/routes
-    (GET "/:id" [id] (str id))
     (GET "/" [] home-handler)
     (GET "/chat/:room" [room :as r] chat-handler)
     (POST "/join" [] join-handler)
@@ -147,5 +131,10 @@
     (println @(s/take! conn1)) ; => "Bob: hi!"
     (println @(s/take! conn2)) ; => "Bob: hi!"
     )
-
   )
+
+
+
+
+
+

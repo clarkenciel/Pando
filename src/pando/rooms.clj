@@ -1,22 +1,29 @@
 (ns pando.rooms)
 
-(defn get-room [site name]
-  (get-in site [:rooms name] nil))
+(defn get-user [{users :users} username]
+  (some #{username} users))
 
-(defn get-user-in-room [site roomname username]
-  (get-in site [:rooms roomname username] nil))
+(defn user-exists? [room username]
+  (boolean (get-user room username)))
 
-(defn room-exists? [site roomname]
-  (boolean (get-room site roomname)))
+(defn add-user [{users :users :as room} username]
+  (assoc room :users (conj users username)))
 
-(defn user-exists? [site roomname username]
-  (boolean (get-user-in-room site roomname username)))
+(defn add-word [{words :words :as room} word]
+  (assoc-in room [:words words] (+ 1 (get words word 0))))
+
+(defn sum-words [words]
+  (apply + (vals words)))
+
+(defn word-percentage [sum word-count]
+  (double (/ word-count sum)))
+
+(defn word-percentages [{words :words}]
+  (let [total (sum-words words)]
+    (map #(word-percentage total %) words)))
 
 (defn make-room [room-name fundamental & user-names]
-  {:users user-names
-   :root  fundamental
+  {:name room-name
+   :users (set user-names)
+   :root fundamental
    :words {}})
-
-(defn add-room! [site room-name room]
-  (get-room (swap! site #(assoc % room-name room))
-            room-name))

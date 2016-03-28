@@ -29,10 +29,17 @@
    [:div#messages]
    [:div#display-divider]])
 
+(defn logout []
+  [:div#logout
+   (f/form-to [:post "/leave"]
+              [:div.form-group
+               (f/submit-button {:id "leave-submit"} "Leave")])])
+
 (defn normal-client
   "HTML for a normal client - allows for chatting, but only hears own part"
   [room-name user-name]
   [:div#main
+   (logout)
    (display-area room-name)
    (post-area room-name user-name)
    (p/include-js "/static/normal.js")])
@@ -41,6 +48,7 @@
   "HTML for an admin client - no chatting, hears all parts"
   [room-name]
   [:div#main
+   (logout)
    (display-area room-name)
    (p/include-js "/static/admin.js")])
 

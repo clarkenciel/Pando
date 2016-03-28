@@ -2,6 +2,7 @@
   (:require
    [compojure.core :as compojure :refer [GET POST]]
    [ring.middleware.params :as params]
+   [ring.middleware.session :as session]
    [ring.middleware.resource :as resource]
    [ring.middleware.file-info :as file-info]
    [ring.util.response :as response]
@@ -19,13 +20,19 @@
 
 ;; event bus, usable with publish! and subscribe
 (def chatrooms (bus/event-bus))
+(def site (atom (site/make-site "Pando" 49.00))) ; tune to G1
+(def error-log (atom []))
+
+(defn is-observer? [user-name]
+  (= (clojure.string/lower-case user-name)
+     "observer"))
 
 (def non-websocket-request
   {:status 400
    :headers {"content-type" "application/text"}
    :body "Expected a websocket request."})
 
-(defn chat-handler [{:keys [params] :as req}]
+(defn message-handler [{:keys [params] :as req}]
   (d/let-flow [conn (d/catch
                         (http/websocket-connection req)
                         (fn [_] nil))]
@@ -45,9 +52,19 @@
                         (s/map #(str name ": " %))
                         (s/buffer 100)))))))
 
+(defn chat-handler [room {{:keys [user-name room-name]} :session}]
+  (if (or (is-observer? user-name)
+          (rooms/user-exists? (site/get-room @site room-name) user-name))
+    {:status 200
+     :headers {"content-type" "text/html"}
+     :body (if (is-observer? user-name)
+             (templates/page (templates/normal-client room-name user-name))
+             (templates/page (templates/admin-client room-name)))}
+    {:status 403
+     :headers {"content-type" "text/html"}
+     :body "You do not have permission to view this chat"}))
+
 ;; joining
-(def users (atom {}))
-(def error-log (atom []))
 
 (defn push-errors! [& es]
   (swap! error-log (fn [eq] (concat eq es))))
@@ -62,6 +79,23 @@
   (or (>= 0 (count name))
       (>= 0 (count room))))
 
+(defn get-user-list [s room-name]
+  (get-in s [:rooms room-name :users]))
+
+(defn modify-user-list! [site room-name f]
+  (let [user-list (get-user-list site room-name)]
+    (assoc-in site [:rooms room-name :users] (f user-list))))
+
+(defn add-user! [room-name user-name]
+  (swap! site
+         (fn [s]
+           (modify-user-list! s room-name #(conj % user-name)))))
+
+(defn remove-user! [room-name user-name]
+  (swap! site
+         (fn [s]
+           (modify-user-list! s room-name #(set (remove #{user-name} %))))))
+
 (defn join-handler [{:keys [params]}]
   (let [room (get params "room-name")
         name (get params "user-name")]
@@ -70,12 +104,22 @@
       (do (push-errors! "Please enter both a name and room")
           (response/redirect "/"))
 
-      (get-in @users [room name])
+      (rooms/user-exists? (site/get-room @site room) name)
       (do (push-errors! "That name is already taken for that room")
           (response/redirect "/"))
 
       :else
-      (response/redirect (str "/chat/" room))))) ; work this out
+      (do
+        (add-user! room name)
+        (assoc (response/redirect (str "/chat/" room))
+               :session {:user-name name
+                         :room-name room})))))
+
+(defn leave-handler [{{:keys [user-name room-name]} :session}]
+  (do
+    (remove-user! room-name user-name)
+    (assoc (response/redirect "/")
+           :session nil)))
 
 (defn home-handler [{:keys [params] :as req}]
   (let [errors (flush-errors!)]
@@ -83,13 +127,18 @@
      :headers {"content-type" "text/html"}
      :body (templates/page (templates/join-form) errors)}))
 
+(def routes
+  (compojure/routes
+   (GET "/" [] home-handler)
+   (GET "/chat/:room" [room :as req] (chat-handler room req))
+   (POST "/join" [] join-handler)
+   (POST "/leave" req (leave-handler req))
+   (route/not-found "No such page.")))
+
 (def handler
-  (params/wrap-params
-   (compojure/routes
-    (GET "/" [] home-handler)
-    (GET "/chat/:room" [room :as r] chat-handler)
-    (POST "/join" [] join-handler)
-    (route/not-found "No such page."))))
+  (-> routes
+      (params/wrap-params)
+      (session/wrap-session)))
 
 
 (comment

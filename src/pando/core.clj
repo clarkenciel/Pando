@@ -138,17 +138,18 @@
      (chesh/generate-string
       {:socketAddress (str "ws://" server ":" port "/add_message")}))))
 
-(defn message-handler [{:keys [params] :as req}]
-  (println "message-handler" req)
-    ;; conn is deferred value - this will block until it can be
-    ;; computed
+(defn message-handler [{:keys [session] :as req}]
+  ;;(println "message-handler")
+  ;;(clojure.pprint/pprint req)
+  ;; conn is deferred value - this will block until it can be
+  ;; computed
   (d/let-flow [conn (d/catch
                         (http/websocket-connection req)
                         (fn [_] nil))]
     (if-not conn
       #'non-websocket-response
-      (d/let-flow [room (:room params)
-                   name (s/take! conn)]
+      (d/let-flow [room (:room-name session)
+                   name (:user-name session)]
         ;; create a stream that consumes all messages from
         ;; the room and connect it to the websocket connection
         (s/connect (bus/subscribe chatrooms room) conn)
@@ -158,7 +159,11 @@
         ;; by publishing its messages to the room in chatrooms
         (s/consume #(bus/publish! chatrooms room %)
                    (->> conn
-                        (s/map #(str name ": " %))
+                        (s/map #(chesh/generate-string
+                                 {"userName" name
+                                  "message" (get
+                                             (chesh/decode %)
+                                             "message")}))
                         (s/buffer 100)))))))
 
 (defn leave-handler [{{:keys [user-name room-name]} :session}]

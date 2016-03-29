@@ -22,10 +22,38 @@ Utils.postJSONAjax = Utils._jsonAjaxFactory("POST");
 Utils.getJSONAjax = Utils._jsonAjaxFactory("GET");
 
 // ----- Sockets
-Utils.getSocketEndpoint = function () {};
+Utils.getSocketEndpoint = function (app, messageTarget) {
+  return function (x) {
+    var socketAddr = JSON.parse(x.responseText).socketAddress;
+    app.socket = new WebSocket(socketAddr);
+    app.socket.onmessage = Utils.insertMessage(messageTarget);
+    console.log(app.socket);
+  };
+};
 
 // ----- Site Info
 Utils.getSiteInfo = function (ele) {
   return JSON.parse(ele.getAttribute('site-data'));
+};
+
+// ----- Message display
+Utils.formatMessage = function (m) {
+  var bigHolder = document.createElement("div");
+  var userNameHolder = document.createElement("div");
+  var messageHolder = document.createElement("div");
+
+  userNameHolder.innerText = m.userName;
+  messageHolder.innerText = m.message;
+  bigHolder.appendChild(userNameHolder);
+  bigHolder.appendChild(messageHolder);
+  
+  return bigHolder;
+};
+
+Utils.insertMessage = function (ele) {
+  return function (m) {
+    var messageHolder = Utils.formatMessage(JSON.parse(m.data));
+    ele.appendChild(messageHolder);
+  };
 };
   

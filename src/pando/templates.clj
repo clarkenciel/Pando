@@ -46,10 +46,10 @@
   "HTML for a normal client - allows for chatting, but only hears own part"
   [{:keys [room-name root]} {:keys [user-name coord]}]
   [:div#main {:site-data
-              (c/generate-string {:user-name user-name
-                                  :room-name room-name
-                                  :coord     coord
-                                  :root      root})}
+              (c/generate-string {:userName user-name
+                                  :roomName room-name
+                                  :coord    coord
+                                  :root     root})}
    (logout)
    (display-area room-name)
    (post-area room-name user-name)

@@ -21,7 +21,7 @@
    [pando.site :as site]))
 
 ;;; SITE
-(def site (atom (site/make-site "Pando" 49.00 [3 5]))) ; tune to G1
+(def site (atom (site/make-site "Pando" (* 4 49.00) [3 5]))) ; tune to G1
 (def chatrooms (bus/event-bus))
 
 ;;; VALIDATION
@@ -138,6 +138,11 @@
      (chesh/generate-string
       {:socketAddress (str "ws://" server ":" port "/add_message")}))))
 
+;; this handler is only fired on the first use of the
+;; /add_message route, after the initial websocket connection
+;; is made, we only care about the code in the s/map expression
+;; because from then on we use aleph to treat the websocket stream
+;; as a simple list (SO COOL)
 (defn message-handler [{:keys [session] :as req}]
   ;; conn is deferred value - this will block until it can be
   ;; computed
@@ -155,13 +160,14 @@
         ;; apply the publish! callback to the buffered stream
         ;; containing strings with messages. I.e, consume the stream
         ;; by publishing its messages to the room in chatrooms
-        (s/consume #(bus/publish! chatrooms room %)
-                   (->> conn
-                        (s/map
-                         #(chesh/generate-string
-                           {"userName" name
-                            "message" (get (chesh/decode %) "message")}))
-                        (s/buffer 100)))))))
+        (s/consume
+         #(bus/publish! chatrooms room %)
+         (->> conn
+              (s/map
+               #(chesh/generate-string
+                 {"userName" name
+                  "message" (get (chesh/decode %) "message")}))
+              (s/buffer 100)))))))
 
 (defn leave-handler [{{:keys [user-name room-name]} :session}]
   (do
@@ -186,11 +192,11 @@
 (def routes
   (compojure/routes
    (GET "/" [] home-handler)
-   (GET "/chat/:room" [room :as req] (chat-handler room req))
    (POST "/join" [] join-handler)
-   (POST "/leave" req (leave-handler req))
-   (GET "/add_message" req (message-handler req))
    (POST "/connect" req (connect-handler req))
+   (GET "/chat/:room" [room :as req] (chat-handler room req))
+   (GET "/add_message" req (message-handler req))
+   (POST "/leave" req (leave-handler req))
    (route/not-found "No such page.")))
 
 (def app-routes
@@ -206,41 +212,6 @@
 
   (def s (http/start-server #'app-routes {:port 10001}))
   (.close s)
-
-  ;; putting and reading
-  ;; in a web app this would be happening on the client side
-  ;; and the socket connection would be served up by the
-  ;; server per a request from the client
-  (let [conn @(http/websocket-client "ws://localhost:10001/echo")]
-    ;; put 10 messages on the server
-    (s/put-all! conn
-                (->> 10 range (map str)))
-
-    ;; take 10 messages off the server and convert the stream
-    ;; into a sequence of strings that we convert to ints
-    (->> conn
-         (s/transform (take 10))
-         s/stream->seq
-         (map #(Integer/parseInt %))
-         doall))
-
-  ;; two clients that can talk to each other
-  (let [conn1 @(http/websocket-client "ws://localhost:10001/chat")
-        conn2 @(http/websocket-client "ws://localhost:10001/chat")]
-    ;; sign in
-    (s/put-all! conn1 ["shoes and ships" "Alice"])
-    (s/put-all! conn2 ["shoes and ships" "Bob"])
-
-    (s/put! conn1 "hello")
-
-    (println @(s/take! conn1)) ; => "Alice: hello"
-    (s/put! conn2 "hi")
-
-    (println @(s/take! conn2)) ; => "Alice: hello"
-
-    (println @(s/take! conn1)) ; => "Bob: hi!"
-    (println @(s/take! conn2)) ; => "Bob: hi!"
-    )
   )
 
 

@@ -22,11 +22,11 @@ Utils.postJSONAjax = Utils._jsonAjaxFactory("POST");
 Utils.getJSONAjax = Utils._jsonAjaxFactory("GET");
 
 // ----- Sockets
-Utils.getSocketEndpoint = function (app, messageTarget) {
+Utils.getSocketEndpoint = function (app, callback) {
   return function (x) {
     var socketAddr = JSON.parse(x.responseText).socketAddress;
     app.socket = new WebSocket(socketAddr);
-    app.socket.onmessage = Utils.insertMessage(messageTarget);
+    app.socket.onmessage = callback;
     console.log(app.socket);
   };
 };
@@ -56,4 +56,19 @@ Utils.insertMessage = function (ele) {
     ele.appendChild(messageHolder);
   };
 };
-  
+
+// ----- Frequency calculation
+Utils.constrainFrequency = function (frequency) {
+  if (typeof frequency === "undefined") return 0;
+  if (!isFinite(frequency)) return 0;
+  while (frequency >= 15000) frequency *= 0.5;
+  while (frequency <= 200) frequency *= 2;
+  return frequency;
+};
+
+Utils.coordToFrequency = function (frequency, dimensions, coord) {
+  var product = 1;
+  for (var i = 0; i < dimensions.length; i++)
+    product *= Math.pow(dimensions[i], coord[i]);
+  return Utils.constrainFrequency(Math.abs(frequency * product));
+};

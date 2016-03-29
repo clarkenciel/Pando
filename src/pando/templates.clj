@@ -41,16 +41,18 @@
 
 (defn normal-client
   "HTML for a normal client - allows for chatting, but only hears own part"
-  [{:keys [room-name root]} {:keys [user-name coord]}]
+  [{:keys [room-name root dimensions]} {:keys [user-name coord]}]
   [:div#main {:site-data
-              (c/generate-string {:userName user-name
-                                  :roomName room-name
-                                  :coord    coord
-                                  :root     root})}
+              (c/generate-string {:userName   user-name
+                                  :roomName   room-name
+                                  :coord      coord
+                                  :root       root
+                                  :dimensions dimensions })}
    (logout)
    (display-area room-name)
    (post-area room-name user-name)
    (p/include-js "/js/client.js")
+   (p/include-js "/js/audio.js")
    (p/include-js "/js/normal.js")])
 
 (defn admin-client
@@ -60,6 +62,7 @@
    (logout)
    (display-area room-name)
    (p/include-js "/js/client.js")
+   (p/include-js "/js/audio.js")
    (p/include-js "/js/admin.js")])
 
 (defn labeled-radio [label]

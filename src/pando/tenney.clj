@@ -6,9 +6,9 @@
 
 (defn stepwise-per-dimension
   "Generate all possible new values for each dimension in a point,
-  assuming stepwise motion. E.g. [0 1] -> [(-1 0 1) (0 1 2)]"
+  assuming stepwise motion. E.g. [0 1] -> [(1 0 -1) (0 1 2)]"
   [point]
-  (mapv (fn [c] (map #(+ c %) [-1 0 1])) point))
+  (mapv (fn [c] (map #(+ c %) [1 0 -1])) point))
 
 (defn stepwise-per-point
   "Generate all possible new positions for a 2D point,
@@ -74,10 +74,9 @@
   given a fundamental and set of 'dimensions,' which represent
   partials over the fundamental."
   [fundamental dimensions coord]
-  (let [rat (reduce
-             (fn [[dim1 cval1] [dim2 cval2]]               
-               (* (Math/pow dim1 cval1)
-                  (Math/pow dim2 cval2)))
+  (let [rat (reduce (fn [[dim1 cval1] [dim2 cval2]]               
+                      (* (Math/pow dim1 cval1)
+                         (Math/pow dim2 cval2)))
              (zipmap dimensions coord))]
     (Math/abs (* fundamental rat))))
 

@@ -8,5 +8,7 @@
                  [gloss "0.2.5"]     ; conversion to/from bytes
                  [compojure "1.5.0"] ; http routing
                  [org.clojure/core.async "0.2.374"]
-                 [hiccup "1.0.5"]]
+                 [ring/ring-json "0.4.0"]
+                 [hiccup "1.0.5"]
+                 [cheshire "5.5.0"]]
   :test-path "test/pando")

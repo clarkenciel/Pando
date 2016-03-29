@@ -1,7 +1,8 @@
 (ns pando.templates
   (:require [hiccup.core :as h]
             [hiccup.page :as p]
-            [hiccup.form :as f]))
+            [hiccup.form :as f]
+            [cheshire.core :as c]))
 
 (defn invisible-field [name val]
   (f/text-field {:style "display:none;"} name val))
@@ -41,21 +42,19 @@
               [:div.form-group
                (f/submit-button {:id "leave-submit"} "Leave")])])
 
-(defn format-coord [coord]
-  (str "coord: " "[" (apply str (interpose "," coord)) "]"))
-
 (defn normal-client
   "HTML for a normal client - allows for chatting, but only hears own part"
-  [{room-name :name :as room} {:keys [user-name coord] :as user}]
-  (println room)
-  [:div#main {:data-bind (str
-                          "user-name: '" user-name "', "
-                          "room-name: '" room-name "', "
-                          (format-coord coord))}
+  [{:keys [room-name root]} {:keys [user-name coord]}]
+  [:div#main {:site-data
+              (c/generate-string {:user-name user-name
+                                  :room-name room-name
+                                  :coord     coord
+                                  :root      root})}
    (logout)
    (display-area room-name)
    (post-area room-name user-name)
-   (p/include-js "/static/normal.js")])
+   (p/include-js "/js/client.js")
+   (p/include-js "/js/normal.js")])
 
 (defn admin-client
   "HTML for an admin client - no chatting, hears all parts"
@@ -63,7 +62,8 @@
   [:div#main
    (logout)
    (display-area room-name)
-   (p/include-js "/static/admin.js")])
+   (p/include-js "/js/client.js")
+   (p/include-js "/js/admin.js")])
 
 (defn labeled-radio [label]
   [:label (f/radio-button {} "room-name" false label)

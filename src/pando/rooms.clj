@@ -4,7 +4,7 @@
 ;; this is moving toward a recursive site, which is conceptually elegant
 ;; TODO: figure out how to make this actually recursive??
 (defn make-room [room-name fundamental dimensions]
-  {:name room-name
+  {:room-name room-name
    :root fundamental
    :users {} ; {username [coord]}
    :words {}
@@ -32,6 +32,8 @@
 
 (defn remove-user [{users :users :as room} username]
   (assoc room :users (dissoc users username)))
+
+(remove-user {:users {"blah" [0 0] "blah2" [-1 0]}} "blah2")
 
 (defn add-word [{words :words :as room} word]
   (assoc-in room [:words words] (+ 1 (get words word 0))))

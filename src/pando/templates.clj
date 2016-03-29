@@ -9,16 +9,13 @@
 
 (defn post-form
   [{:keys [name root]} user-name]
-  (f/form-to [:post "/add_message"]
-             [:div.form-group
-              (invisible-field "user-name" user-name)
-              (invisible-field "room-name" name)
-              (f/label {} "message" "Message:")
-              (f/text-area {:id "message-area"
-                            :placeholder "Enter a message..."}
-                           "message")
-              [:div#message-submit.button               
-               "Send"]]))
+  [:div.post-form
+   (f/label {} "message" "Message:")
+   (f/text-area {:id "message-area"
+                 :placeholder "Enter a message..."}
+                "message")
+   [:div#message-submit.button               
+    "Send"]])
 
 (defn post-area [room user-name]
   [:div#post-area

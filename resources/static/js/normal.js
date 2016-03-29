@@ -3,9 +3,9 @@
   App.siteData = Utils.getSiteInfo(document.getElementById('main'));
   App.socket = null;
   App.send = function (m) {
-    if (this.socket !== null) {
-      this.socket.send(m);
-    }
+    if (App.socket != null) {
+      App.socket.send(m);
+    };
   };
 
   var displayArea = document.getElementById("messages");
@@ -26,7 +26,7 @@
       "roomName": App.siteData.roomName,
       "frequency": App.siteData.frequency
     };
-    console.log("sending", out);
+    
     App.send(JSON.stringify(out));
   };
   
@@ -36,5 +36,4 @@
                      Utils.getSocketEndpoint(App, displayArea));
 
   submitButton.onclick = function () { sendMessage(flushMessage()); };
-}));
-  
+}))();

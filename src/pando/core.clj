@@ -139,8 +139,6 @@
       {:socketAddress (str "ws://" server ":" port "/add_message")}))))
 
 (defn message-handler [{:keys [session] :as req}]
-  ;;(println "message-handler")
-  ;;(clojure.pprint/pprint req)
   ;; conn is deferred value - this will block until it can be
   ;; computed
   (d/let-flow [conn (d/catch
@@ -159,11 +157,10 @@
         ;; by publishing its messages to the room in chatrooms
         (s/consume #(bus/publish! chatrooms room %)
                    (->> conn
-                        (s/map #(chesh/generate-string
-                                 {"userName" name
-                                  "message" (get
-                                             (chesh/decode %)
-                                             "message")}))
+                        (s/map
+                         #(chesh/generate-string
+                           {"userName" name
+                            "message" (get (chesh/decode %) "message")}))
                         (s/buffer 100)))))))
 
 (defn leave-handler [{{:keys [user-name room-name]} :session}]

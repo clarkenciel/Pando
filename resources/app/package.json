@@ -1,0 +1,21 @@
+{
+  "name": "Pando",
+  "version": "0.1.0",
+  "description": "Distributed, chat-based, web art",
+  "main": "index.js",
+  "scripts": {},
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/clarkenciel/pando.git"
+  },
+  "author": "Danny Clarke",
+  "license": "MIT",
+  "bugs": {
+    "url": "https://github.com/clarkenciel/pando/issues"
+  },
+  "homepage": "https://github.com/clarkenciel/pando/#README",
+  "dependencies": {
+    "browserify": "^12.0.1",
+    "mithril": "0.2.3"
+  }
+}

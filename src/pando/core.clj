@@ -1,6 +1,6 @@
 (ns pando.core
   (:require
-   [compojure.core :as compojure :refer [GET POST]]
+   [compojure.core :as compojure :refer [GET POST context]]
    [compojure.route :as route]
    [ring.middleware.params :as params]
    [ring.middleware.session :as session]
@@ -8,7 +8,7 @@
    [ring.middleware.file-info :as file-info]
    [ring.middleware.content-type :as content]
    [ring.middleware.json :as json]
-   [ring.util.response :as response]   
+   [ring.util.response :as response]
    [aleph.http :as http]
    [byte-streams :as bs]
    [manifold.stream :as s]
@@ -21,7 +21,7 @@
    [pando.site :as site]))
 
 ;;; SITE
-(def site (atom (site/make-site "Pando" (* 4 49.00) [3 5]))) ; tune to G1
+(def site (atom (site/make-site "Pando" (* 4 49.00) [2 5]))) ; tune to G1
 (def chatrooms (bus/event-bus))
 
 ;;; VALIDATION
@@ -30,25 +30,41 @@
   (= (clojure.string/lower-case user-name)
      "observer"))
 
-(defn invalid-signup [room name]
-  (or (>= 0 (count name))
-      (>= 0 (count room))))
+(defn invalid-signup [room-name user-name]
+  (or (>= 0 (count user-name))
+      (>= 0 (count room-name))))
+
+(defn authorized? [room-name user-name]
+  (or (is-observer? user-name)
+      (rooms/user-exists?
+       (site/get-room @site room-name)
+       user-name)))
 
 ;;; RESPONSES
 
-(def non-websocket-response
-  {:status 400
-   :headers {"content-type" "application/text"}
-   :body "Expected a websocket request."})
-
-(defn success-response [body]
+(defn html-success-response [body]
   {:status 200
    :headers {"content-type" "text/html"}
    :body body})
 
-(defn no-permission-response [body]
+(def json-non-websocket-response
+  {:status 400
+   :headers {"content-type" "application/json"}
+   :body {:message "Expected a websocket request."}})
+
+(defn json-success-response [body]
+  {:status 200
+   :headers {"content-type" "application/json"}
+   :body body})
+
+(defn json-no-permission-response [body]
   {:status 403
-   :headers {"content-type" "text/html"}
+   :headers {"content-type" "application/json"}
+   :body body})
+
+(defn json-bad-request [body]
+  {:status 400
+   :headers {"content-type" "application/json"}
    :body body})
 
 ;;; ERROR QUEUE
@@ -59,7 +75,7 @@
   (swap! error-log (fn [eq] (concat eq es))))
 
 (defn flush-errors! []
-  (let [out @error-log] 
+  (let [out @error-log]
     (swap! error-log (fn [_] []))
     (when (< 0 (count out))
       out)))
@@ -84,59 +100,53 @@
 (defn remove-room! [room-name]
   (swap! site #(site/remove-room % room-name)))
 
+(defn shift-room! [room-name freq]
+  (swap! site #(site/modify-room
+                % room-name
+                (partial rooms/shift-room freq))))
+
+(defn pack-room-shift! [user-name room-name message]
+  (let [m (chesh/decode message)
+        r (site/get-room (shift-room! room-name (get m "frequency"))
+                         room-name)]
+    (chesh/generate-string
+     {"userName" user-name
+      "message" (get m "message")
+      "newRoot" (:root r)})))
+
+(defn filter-empty-vals [params]
+  (select-keys
+   params
+   (keep (fn [[k v]]
+           (when (not= v "") k))
+         params)))
+
 ;;; HANDLERS
 
 (defn join-handler [{:keys [params]}]
-  (let [ps (select-keys params
-                        (keep (fn [[k v]]
-                                (when (not= v "") k))
-                              params))
+  (let [ps (filter-empty-vals params)
         room-name (or (get ps "new-room-name")
                       (get ps "room-name"))
         user-name (get ps "user-name")]
     (cond
+      ;; when joining, make sure we have a target room and user name
       (invalid-signup room-name user-name)
-      (do (push-errors! "Please enter both a name and room")
-          (response/redirect "/"))
+      (json-bad-request
+       {:message "Please provide both a name and room."})
 
+      ;; when joining, make sure we don't duplicate a user
       (rooms/user-exists? (site/get-room @site room-name) user-name)
-      (do (push-errors! "That name is already taken for that room")
-          (response/redirect "/"))
+      (json-no-permission-response
+       {:message (str user-name " is already taken for the room: " room-name ".")})
 
       :else
-      (do
-        (when-not (site/room-exists? @site room-name)
-          (add-room! room-name))
-        (when-not (rooms/user-exists?
-                   (site/get-room @site room-name)
-                   user-name)
-          (add-user! room-name user-name))
-        (assoc (response/redirect (str "/chat/" room-name))
-               :session {:user-name user-name
-                         :room-name room-name})))))
-
-(defn chat-handler [room {{:keys [user-name room-name]} :session}]
-  (if-not (or (is-observer? user-name)
-              (rooms/user-exists?
-               (site/get-room @site room-name)
-               user-name))
-    (no-permission-response
-     "You do not have permission to view this chat")
-    
-    (let [room (site/get-room @site room-name)
-          user (rooms/get-user room user-name)]
-      (success-response (if (is-observer? user-name)
-                          (templates/page
-                           (templates/admin-client room))
-                          (templates/page
-                           (templates/normal-client room user)))))))
-
-(defn connect-handler [req]
-  (let [server (:server-name req)
-        port   (:server-port req)]
-    (success-response
-     (chesh/generate-string
-      {:socketAddress (str "ws://" server ":" port "/add_message")}))))
+      (do (swap! site
+                 #(-> %
+                      (site/maybe-add-room room-name)
+                      (site/maybe-add-user room-name user-name)))
+          (assoc (json-success-response {:loggedIn true})
+                 :session {:user-name user-name
+                           :room-name room-name})))))
 
 ;; this handler is only fired on the first use of the
 ;; /add_message route, after the initial websocket connection
@@ -144,29 +154,18 @@
 ;; because from then on we use aleph to treat the websocket stream
 ;; as a simple list (SO COOL)
 (defn message-handler [{:keys [session] :as req}]
-  ;; conn is deferred value - this will block until it can be
-  ;; computed
   (d/let-flow [conn (d/catch
                         (http/websocket-connection req)
                         (fn [_] nil))]
     (if-not conn
-      #'non-websocket-response
-      (d/let-flow [room (:room-name session)
-                   name (:user-name session)]
-        ;; create a stream that consumes all messages from
-        ;; the room and connect it to the websocket connection
-        (s/connect (bus/subscribe chatrooms room) conn)
-        
-        ;; apply the publish! callback to the buffered stream
-        ;; containing strings with messages. I.e, consume the stream
-        ;; by publishing its messages to the room in chatrooms
+      #'json-non-websocket-response
+      (d/let-flow [room-name (:room-name session)
+                   user-name (:user-name session)]
+        (s/connect (bus/subscribe chatrooms room-name) conn)
         (s/consume
-         #(bus/publish! chatrooms room %)
+         #(bus/publish! chatrooms room-name %)
          (->> conn
-              (s/map
-               #(chesh/generate-string
-                 {"userName" name
-                  "message" (get (chesh/decode %) "message")}))
+              (s/map (partial pack-room-shift! user-name room-name))
               (s/buffer 100)))))))
 
 (defn leave-handler [{{:keys [user-name room-name]} :session}]
@@ -178,30 +177,57 @@
            :session nil)))
 
 (defn home-handler [{:keys [params session] :as req}]
-  (let [errors (flush-errors!)
-        user-name (:user-name session)
-        room-name (:room-name session)]
-    (if (and user-name room-name)
-      (response/redirect (str "/chat/" room-name))
-      (success-response (templates/page
-                         (templates/join-form @site)
-                         errors)))))
+  (html-success-response (slurp "resources/app/index.html"))
+  ;; (let [user-name (:user-name session)
+  ;;       room-name (:room-name session)]
+  ;;   ;; if not previously signed in
+  ;;   (if-not (and user-name room-name)
+  ;;     ;; present home page with join form
+  ;;     (html-success-response
+  ;;      (templates/page
+  ;;       (templates/join-form @site)))
+  ;;     ;; otherwise, present chat room
+  ;;     (let [room (site/get-room @site room-name)
+  ;;           user (rooms/get-user room user-name)]
+  ;;       (html-success-response
+  ;;        (if (is-observer? user-name)
+  ;;          (templates/page
+  ;;           (templates/admin-client room))
+  ;;          (templates/page
+  ;;           (templates/normal-client room user)))))))
+  )
+
+(defn list-rooms-handler []
+  (let [rooms (site/list-rooms-info @site)]
+    (json-success-response
+     {:roomCount (count rooms)
+      :rooms rooms})))
+
+(defn list-users-handler [room-name]
+  (if-not (site/room-exists? @site room-name)
+    (json-bad-request
+     {:message (str room-name " does not exist!")})
+    (let [usernames (rooms/list-usernames
+                     (site/get-room @site room-name))]
+      (json-success-response
+       {:userCount (count usernames)
+        :users usernames}))))
 
 ;;; ROUTES
 
 (def routes
   (compojure/routes
    (GET "/" [] home-handler)
-   (POST "/join" [] join-handler)
-   (POST "/connect" req (connect-handler req))
-   (GET "/chat/:room" [room :as req] (chat-handler room req))
-   (GET "/add_message" req (message-handler req))
-   (POST "/leave" req (leave-handler req))
-   (route/not-found "No such page.")))
+   (GET "/api/rooms" [] list-rooms-handler)
+   (GET "/api/users/:room-name" [room-name] (list-users-handler room-name))
+   (POST "/join" req (join-handler req))
+   (GET "/message" req (message-handler req))
+   (POST "/api/leave" req (leave-handler req))
+   (route/not-found "Nothing here!")))
 
 (def app-routes
   (-> routes
-      (resource/wrap-resource "static")
+      (resource/wrap-resource "app")
       (content/wrap-content-type)
       (params/wrap-params)
       (json/wrap-json-body)
@@ -213,9 +239,3 @@
   (def s (http/start-server #'app-routes {:port 10001}))
   (.close s)
   )
-
-
-
-
-
-

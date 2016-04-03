@@ -76,3 +76,36 @@ Sound.play();
 Sound.setFrequency(1500);
 Sound.setVolume(0.2);
 Sound.stop(3);*/
+
+var context = new AudioContext();
+var node = context.createBufferSource();
+var buffer = context.createBuffer(1, 4096, context.sampleRate);
+var data = buffer.getChannelData(0);
+
+for (var i = 0; i < 4096; i++) {
+  data[i] = Math.random();
+}
+node.buffer = buffer;
+node.loop = true;
+node.disconnect(context.destination);
+node.start(0);
+node.stop();
+node.playbackRate.value = 0;
+
+var amp = context.createGain();
+var amp2 = context.createGain();
+var master = context.createGain();
+var sine = context.createOscillator();
+
+node.connect(amp);
+amp.connect(master.gain);
+sine.connect(master);
+sine.connect(amp2);
+amp2.connect(node.playbackRate);
+master.connect(context.destination);
+
+sine.start();
+amp2.gain.value = 0.05;
+master.gain.value = 0.5;
+amp.gain.value = 0.5;
+

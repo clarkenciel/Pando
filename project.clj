@@ -7,8 +7,8 @@
                  [manifold "0.1.2"]  ; managing asynchronous values
                  [gloss "0.2.5"]     ; conversion to/from bytes
                  [compojure "1.5.0"] ; http routing
-                 [org.clojure/core.async "0.2.374"]
-                 [ring/ring-json "0.4.0"]
-                 [hiccup "1.0.5"]
-                 [cheshire "5.5.0"]]
+                 [org.clojure/core.async "0.2.374"] ; async!
+                 [ring/ring-json "0.4.0"] ; deliver response bodies as json
+                 [hiccup "1.0.5"] ; html rendering
+                 [cheshire "5.5.0"]] ; this dep might be redundant
   :test-path "test/pando")

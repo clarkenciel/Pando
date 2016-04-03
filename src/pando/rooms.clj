@@ -6,8 +6,7 @@
 (defn make-room [room-name fundamental dimensions]
   {:room-name room-name
    :root fundamental
-   :users {} ; {username [coord]}
-   :words {}
+   :users {}
    :dimensions dimensions})
 
 (defn get-user [{users :users} username]
@@ -23,8 +22,11 @@
 (defn get-coords [{users :users}]
   (vals users))
 
-(defn get-usernames [{users :users}]
+(defn list-usernames [{users :users}]
   (keys users))
+
+(defn user-count [{users :users}]
+  (reduce (fn [acc _] (inc acc)) 0 users))
 
 (defn add-user [{users :users :as room} username]
   (let [new-coord (tenney/memo-next-coord (vals users))]
@@ -33,18 +35,8 @@
 (defn remove-user [{users :users :as room} username]
   (assoc room :users (dissoc users username)))
 
-(remove-user {:users {"blah" [0 0] "blah2" [-1 0]}} "blah2")
-
-(defn add-word [{words :words :as room} word]
-  (assoc-in room [:words words] (+ 1 (get words word 0))))
-
-(defn sum-words [words]
-  (apply + (vals words)))
-
-(defn word-percentage [sum word-count]
-  (double (/ word-count sum)))
-
-(defn word-percentages [{words :words}]
-  (let [total (sum-words words)]
-    (map #(word-percentage total %) words)))
-
+(defn shift-room [frequency {root :root :as room}]
+  (assoc room :root (cond
+                      (> root frequency) (dec root)
+                      (> frequency root) (inc root)
+                      :else root)))

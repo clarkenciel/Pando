@@ -1,6 +1,7 @@
 (ns pando.core
   (:require
-   [compojure.core :as compojure :refer [GET POST context]]
+   [compojure.core :as compojure
+    :refer [DELETE PUT GET POST context]]
    [compojure.route :as route]
    [ring.middleware.params :as params]
    [ring.middleware.session :as session]
@@ -47,25 +48,28 @@
    :headers {"content-type" "text/html"}
    :body body})
 
+(defn json-body [body]
+  (chesh/generate-string body))
+
 (def json-non-websocket-response
   {:status 400
    :headers {"content-type" "application/json"}
-   :body {:message "Expected a websocket request."}})
+   :body (json-body {:message "Expected a websocket request."})})
 
 (defn json-success-response [body]
   {:status 200
    :headers {"content-type" "application/json"}
-   :body body})
+   :body (json-body body)})
 
 (defn json-no-permission-response [body]
   {:status 403
    :headers {"content-type" "application/json"}
-   :body body})
+   :body (json-body body)})
 
 (defn json-bad-request [body]
   {:status 400
    :headers {"content-type" "application/json"}
-   :body body})
+   :body (json-body body)})
 
 ;;; ERROR QUEUE
 
@@ -123,11 +127,12 @@
 
 ;;; HANDLERS
 
-(defn join-handler [{:keys [params]}]
-  (let [ps (filter-empty-vals params)
+(defn create-room-and-join-handler [{:keys [body]}]
+  (let [ps (filter-empty-vals body)
         room-name (or (get ps "new-room-name")
                       (get ps "room-name"))
         user-name (get ps "user-name")]
+    
     (cond
       ;; when joining, make sure we have a target room and user name
       (invalid-signup room-name user-name)
@@ -141,19 +146,19 @@
 
       :else
       (do (swap! site
-                 #(-> %
-                      (site/maybe-add-room room-name)
+                 #(-> % (site/maybe-add-room room-name)
                       (site/maybe-add-user room-name user-name)))
-          (assoc (json-success-response {:loggedIn true})
-                 :session {:user-name user-name
-                           :room-name room-name})))))
+          (json-success-response
+           {:loggedIn true
+            :userName user-name
+            :roomName room-name})))))
 
 ;; this handler is only fired on the first use of the
 ;; /add_message route, after the initial websocket connection
 ;; is made, we only care about the code in the s/map expression
 ;; because from then on we use aleph to treat the websocket stream
 ;; as a simple list (SO COOL)
-(defn message-handler [{:keys [session] :as req}]
+(defn connect-handler [{:keys [session] :as req}]
   (d/let-flow [conn (d/catch
                         (http/websocket-connection req)
                         (fn [_] nil))]
@@ -168,7 +173,7 @@
               (s/map (partial pack-room-shift! user-name room-name))
               (s/buffer 100)))))))
 
-(defn leave-handler [{{:keys [user-name room-name]} :session}]
+(defn remove-user-handler [{{:keys [user-name room-name]} :session}]
   (do
     (remove-user! room-name user-name)
     (when (>= 0 (count (:users (site/get-room @site room-name))))
@@ -177,27 +182,9 @@
            :session nil)))
 
 (defn home-handler [{:keys [params session] :as req}]
-  (html-success-response (slurp "resources/app/index.html"))
-  ;; (let [user-name (:user-name session)
-  ;;       room-name (:room-name session)]
-  ;;   ;; if not previously signed in
-  ;;   (if-not (and user-name room-name)
-  ;;     ;; present home page with join form
-  ;;     (html-success-response
-  ;;      (templates/page
-  ;;       (templates/join-form @site)))
-  ;;     ;; otherwise, present chat room
-  ;;     (let [room (site/get-room @site room-name)
-  ;;           user (rooms/get-user room user-name)]
-  ;;       (html-success-response
-  ;;        (if (is-observer? user-name)
-  ;;          (templates/page
-  ;;           (templates/admin-client room))
-  ;;          (templates/page
-  ;;           (templates/normal-client room user)))))))
-  )
+  (html-success-response (slurp "resources/app/index.html")))
 
-(defn list-rooms-handler []
+(defn list-rooms-handler [req]
   (let [rooms (site/list-rooms-info @site)]
     (json-success-response
      {:roomCount (count rooms)
@@ -215,15 +202,22 @@
 
 ;;; ROUTES
 
+(def room-routes
+  (context "/api/rooms" []
+           (GET "/list" req (list-rooms-handler req))
+           (GET "/users/:room-name" [room-name]
+                (list-users-handler room-name))
+           (POST "/join" req
+                 (create-room-and-join-handler req))
+           (POST "/connect" req
+                 (connect-handler req))
+           (DELETE "/quit/:room-name/:user-name" [room-name user-name]
+                   (remove-user-handler room-name user-name))))
+
 (def routes
   (compojure/routes
-   (GET "/" [] home-handler)
-   (GET "/api/rooms" [] list-rooms-handler)
-   (GET "/api/users/:room-name" [room-name] (list-users-handler room-name))
-   (POST "/join" req (join-handler req))
-   (GET "/message" req (message-handler req))
-   (POST "/api/leave" req (leave-handler req))
-   (route/not-found "Nothing here!")))
+   room-routes
+   (GET "*" [] home-handler)))
 
 (def app-routes
   (-> routes
@@ -238,4 +232,5 @@
 
   (def s (http/start-server #'app-routes {:port 10001}))
   (.close s)
+  
   )

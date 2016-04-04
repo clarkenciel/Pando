@@ -17,8 +17,8 @@
 
 (defn list-rooms-info [site]
   (map (fn [[_ r]]
-         {:roomName (:name r)
-          :user-count (rooms/user-count r)})
+         {:roomName (:room-name r)
+          :userCount (rooms/user-count r)})
        (:rooms site)))
 
 (defn add-room
@@ -35,16 +35,16 @@
 (defn remove-room [{rooms :rooms :as site} room-name]
   (assoc site :rooms (dissoc rooms room-name)))
 
-(defn maybe-add-room [site room-name]
-  (if (room-exists? site room-name)
-    site
-    (add-room site room-name)))
+(defn modify-room [site room-name f]
+  (let [room (get-room site room-name)]
+    (assoc-in site [:rooms room-name] (f room))))
 
 (defn maybe-add-user [site room-name user-name]
   (if (rooms/user-exists? (get-room site room-name) user-name)
     site
     (modify-room site room-name #(rooms/add-user % user-name))))
 
-(defn modify-room [site room-name f]
-  (let [room (get-room site room-name)]
-    (assoc-in site [:rooms room-name] (f room))))
+(defn maybe-add-room [site room-name]
+  (if (room-exists? site room-name)
+    site
+    (add-room site room-name)))

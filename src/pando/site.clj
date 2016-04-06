@@ -16,21 +16,22 @@
   (get-in site [:rooms roomname]))
 
 (defn list-rooms-info [site]
+  (println site)
   (map (fn [[_ r]]
          {:roomName (:room-name r)
           :userCount (rooms/user-count r)})
        (:rooms site)))
 
 (defn add-room
-  [{:keys [rooms used-coords root dimensions] :as site} room-name]
+  [{:keys [used-coords root dimensions] :as site} room-name]
   (let [new-coord (tenney/memo-next-coord used-coords)
         new-room  (rooms/make-room
                    room-name
                    (tenney/coord->freq root dimensions new-coord)
                    dimensions)]
-    (assoc site
-           :rooms (assoc rooms room-name new-room)
-           :used-coords (conj used-coords new-coord))))
+    (-> site
+        (assoc-in [:rooms room-name] new-room)
+        (assoc :used-coords (conj used-coords new-coord)))))
 
 (defn remove-room [{rooms :rooms :as site} room-name]
   (assoc site :rooms (dissoc rooms room-name)))
@@ -38,11 +39,6 @@
 (defn modify-room [site room-name f]
   (let [room (get-room site room-name)]
     (assoc-in site [:rooms room-name] (f room))))
-
-(defn maybe-add-user [site room-name user-name]
-  (if (rooms/user-exists? (get-room site room-name) user-name)
-    site
-    (modify-room site room-name #(rooms/add-user % user-name))))
 
 (defn maybe-add-room [site room-name]
   (if (room-exists? site room-name)

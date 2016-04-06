@@ -1,6 +1,11 @@
-var m = require('mithril');
-//var rooms = require('./components/room');
 var target = document.getElementById('app');
+
+// var logout = function () {
+//   m.request({ method: "DELETE",
+//               url: "/api/rooms/quit" }).
+//     then(function () { console.log("we quit!"); }).
+//     catch(function (e) { console.log("we didn't quit! ", e) });
+// };
 
 var makeElement = function (ele, label) {
   return function (x) { return m(ele, label + x); };
@@ -49,15 +54,18 @@ var Room = function (roomName, userName) {
   this.user = m.prop(userName || "");
   this.socket = m.prop(null);
   this.errors = m.prop([]);
+  this.messages = m.prop([]);
+  this.currentMessage = m.prop("");
 };
 
 Room.join = function (room) {
   m.request({ method: "POST",
-              url: "/api/rooms/join",
+              url: "/api/authorize",
               data: { "room-name": room.name(),
                       "user-name": room.user() }}).
-    then(function (data) {      
-      var redirect = "/rooms/" + data.roomName + "/" + data.userName;
+    then(function (data) {
+      console.log(data);
+      var redirect = "/rooms/" + data.roomName + "/" + data.user;
       m.route(redirect);
     }).
     catch(function (error) {
@@ -89,14 +97,63 @@ Room.formView = function (room, roomList) {
                      "Join"))));
 };
 
+Room.renderMessage = function (message) {
+  return m("div.message", [
+    m("div.message.username", message.userName),
+    m("div.message.body", message.message)]);
+};
+
 Room.conversation = {
   controller: function () {
+    var socketAddr = 'ws://' + window.location.host + '/api/connect';
+    var self = this;    
+
     this.room = new Room(m.route.param("roomName"),
                          m.route.param("userName"));
-    console.log("Room.conversation ", this.room.name(), this.room.user());
+    
+    this.socket = new WebSocket(socketAddr);
+    this.socket.onmessage = function (message) {
+      self.room.messages().push(JSON.parse(message.data));
+      m.redraw();
+      console.log("socket callback ", message, self.room.messages());
+    };
+    this.socket.onclose = function (x) {
+      console.log("closing socket", x);
+    };
+    this.socket.onerror = function (e) {
+      console.log("socket error", e);
+      m.route("/");
+    };
+    window.onbeforeunload = function () {
+      self.socket.close();
+    };
+    
+    console.log("Room.conversation ",
+                this.room.name(),
+                this.room.user(),
+                this.socket);
   },
+  
   view: function (ctl) {
-    return m("h1", "hi " + ctl.room.user() + "!");
+    return m("div.container",[
+      m("div#messages", ctl.room.messages().map(Room.renderMessage)),
+      m("div#messageForm", [
+        m("form", [
+          m("textarea#messageBody",
+            { oninput: m.withAttr("value", ctl.room.currentMessage) },
+            ctl.room.currentMessage()),
+          m("div.button",
+            {onclick: function () {
+              var out = {
+                "message": ctl.room.currentMessage,
+                "userName": ctl.room.user,
+                "roomName": ctl.room.name,
+                "frequency": 0
+              };    
+              ctl.socket.send(JSON.stringify(out));
+              ctl.room.currentMessage("");
+            }},
+            "Send")])])]);
   }
 };
 

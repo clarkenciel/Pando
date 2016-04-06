@@ -3,27 +3,26 @@
    [compojure.core :as compojure
     :refer [DELETE PUT GET POST context]]
    [compojure.route :as route]
+   [clj-time.core :as t]
    [ring.middleware.params :as params]
    [ring.middleware.session :as session]
    [ring.middleware.resource :as resource]
    [ring.middleware.file-info :as file-info]
    [ring.middleware.content-type :as content]
    [ring.middleware.json :as json]
-   [ring.util.response :as response]
    [aleph.http :as http]
-   [byte-streams :as bs]
    [manifold.stream :as s]
    [manifold.deferred :as d]
-   [manifold.bus :as bus]
-   [clojure.core.async :as a]
+   [manifold.bus :as bus] 
    [cheshire.core :as chesh]
-   [pando.templates :as templates]
    [pando.rooms :as rooms]
    [pando.site :as site]))
 
 ;;; SITE
 (def site (atom (site/make-site "Pando" (* 4 49.00) [2 5]))) ; tune to G1
 (def chatrooms (bus/event-bus))
+(def user-kill-queue (atom {}))
+(def cookie-lifetime (* 2 3600))
 
 ;;; VALIDATION
 
@@ -35,11 +34,17 @@
   (or (>= 0 (count user-name))
       (>= 0 (count room-name))))
 
-(defn authorized? [room-name user-name]
-  (or (is-observer? user-name)
-      (rooms/user-exists?
-       (site/get-room @site room-name)
-       user-name)))
+(defn authorized? [{:keys [logged-in room-name user-name]}]
+  (if (not (and room-name user-name))
+    false
+    (or (is-observer? user-name) ; observers don't need to be logged in
+        logged-in)))
+
+(defn user-name-available? [site room-name user-name]
+  (println "checking availability of" user-name "in" room-name)
+  (if-let [timeout (get-in site [:rooms room-name :users user-name :timeout])]
+    (t/after? (t/now) timeout)
+    true))
 
 ;;; RESPONSES
 
@@ -71,32 +76,22 @@
    :headers {"content-type" "application/json"}
    :body (json-body body)})
 
-;;; ERROR QUEUE
-
-(def error-log (atom []))
-
-(defn push-errors! [& es]
-  (swap! error-log (fn [eq] (concat eq es))))
-
-(defn flush-errors! []
-  (let [out @error-log]
-    (swap! error-log (fn [_] []))
-    (when (< 0 (count out))
-      out)))
-
 ;;; SITE-LEVEL ROOM AND USER MANIPULATION
 
 (defn add-user! [room-name user-name]
-  (swap! site
-         (fn [s]
-           (site/modify-room
-            s room-name #(rooms/add-user % user-name)))))
+  (swap! site (fn [s]
+                (site/modify-room
+                 s room-name
+                 #(rooms/add-user % user-name (t/millis cookie-lifetime))))))
 
 (defn remove-user! [room-name user-name]
+  (println "removing user:" user-name "from room:" room-name)
   (swap! site
          (fn [s]
-           (site/modify-room
-            s room-name #(rooms/remove-user % user-name)))))
+           (let [new-s (site/modify-room s room-name #(rooms/remove-user % user-name))]
+             (if (>= 0 (rooms/user-count (site/get-room new-s room-name)))
+               (site/remove-room new-s room-name)
+               new-s)))))
 
 (defn add-room! [room-name]
   (swap! site #(site/add-room % room-name)))
@@ -110,13 +105,41 @@
                 (partial rooms/shift-room freq))))
 
 (defn pack-room-shift! [user-name room-name message]
+  (println user-name room-name message)
   (let [m (chesh/decode message)
-        r (site/get-room (shift-room! room-name (get m "frequency"))
-                         room-name)]
-    (chesh/generate-string
-     {"userName" user-name
-      "message" (get m "message")
-      "newRoot" (:root r)})))
+        r (site/get-room
+           (shift-room! room-name (get m "frequency"))
+           room-name)]
+    (if r
+      (chesh/generate-string (assoc m "newRoot" (:root r)))
+      (do (println "no r")
+          message))))
+
+(defn create-and-join! [room-name user-name]
+  (println "authorizing" user-name "for" room-name)
+  (let [resp (json-success-response {:roomName room-name :user user-name})]
+    (if (is-observer? user-name)
+      ;; don't "log in" an observer
+      (assoc resp :session {:user-name user-name :room-name room-name})
+      (do        
+        (swap! site
+               (fn [s]
+                 (-> s
+                     (site/maybe-add-room room-name)
+                     (site/modify-room
+                      room-name
+                      #(rooms/add-user % user-name (t/seconds cookie-lifetime))))))
+        (assoc resp
+               :session
+               {:logged-in true :user-name user-name :room-name room-name})))))
+
+(defn refresh-user! [room-name user-name]
+  (swap! site (fn [s]
+                (site/modify-room
+                 s room-name
+                 #(rooms/add-user % user-name (t/seconds cookie-lifetime))))))
+
+;; HELPERS
 
 (defn filter-empty-vals [params]
   (select-keys
@@ -125,62 +148,72 @@
            (when (not= v "") k))
          params)))
 
+(defn with-room [room-name f]
+  (if-not (site/room-exists? @site room-name)
+    (json-bad-request
+     {:message (str room-name " does not exist!")})
+    (let [room (site/get-room @site room-name)]
+      (f room))))
+
 ;;; HANDLERS
 
-(defn create-room-and-join-handler [{:keys [body]}]
+(defn auth-handler [{:keys [body session]}]
   (let [ps (filter-empty-vals body)
         room-name (or (get ps "new-room-name")
                       (get ps "room-name"))
         user-name (get ps "user-name")]
-    
+    (println "checking authorization of" user-name "for" room-name)
     (cond
+      ;; if the user is still logged in
+      (authorized? session)
+      (do
+        (refresh-user! room-name user-name)
+        (assoc (json-success-response {:message "Welcome!"}) :session session))
+      
       ;; when joining, make sure we have a target room and user name
       (invalid-signup room-name user-name)
-      (json-bad-request
-       {:message "Please provide both a name and room."})
+      (assoc (json-bad-request
+              {:message "Please provide both a name and room."})
+             :session nil)
 
       ;; when joining, make sure we don't duplicate a user
-      (rooms/user-exists? (site/get-room @site room-name) user-name)
-      (json-no-permission-response
-       {:message (str user-name " is already taken for the room: " room-name ".")})
+      (not (user-name-available? @site room-name user-name))
+      (assoc (json-no-permission-response
+              {:message (str user-name " is already taken for the room: " room-name ".")})
+             :session nil)
 
       :else
-      (do (swap! site
-                 #(-> % (site/maybe-add-room room-name)
-                      (site/maybe-add-user room-name user-name)))
-          (json-success-response
-           {:loggedIn true
-            :userName user-name
-            :roomName room-name})))))
+      (create-and-join! room-name user-name))))
 
-;; this handler is only fired on the first use of the
-;; /add_message route, after the initial websocket connection
-;; is made, we only care about the code in the s/map expression
-;; because from then on we use aleph to treat the websocket stream
-;; as a simple list (SO COOL)
 (defn connect-handler [{:keys [session] :as req}]
-  (d/let-flow [conn (d/catch
-                        (http/websocket-connection req)
-                        (fn [_] nil))]
-    (if-not conn
-      #'json-non-websocket-response
-      (d/let-flow [room-name (:room-name session)
-                   user-name (:user-name session)]
-        (s/connect (bus/subscribe chatrooms room-name) conn)
-        (s/consume
-         #(bus/publish! chatrooms room-name %)
-         (->> conn
-              (s/map (partial pack-room-shift! user-name room-name))
-              (s/buffer 100)))))))
+  (let [room-name (:room-name session)
+        user-name (:user-name session)]
+    (println "attempting to connect" user-name "to" room-name session)
+    (if-not (authorized? session)
+      (json-no-permission-response
+       {:message "Your session has expired. Please log in again."})
+      (d/let-flow [conn (d/catch (http/websocket-connection req) (fn [_] nil))]
+        (if-not conn
+          #'json-non-websocket-response      
+          (d/let-flow [source (bus/subscribe chatrooms room-name)]
+            ;; so: chatrooms bus -> websocket
+            (s/connect source conn)
+            
+            ;; so: websocket -> chatrooms bus
+            (s/consume
+             #(bus/publish! chatrooms room-name %)
+             (s/map (partial pack-room-shift! user-name room-name)
+                    (s/throttle 10 conn)))))))))
 
 (defn remove-user-handler [{{:keys [user-name room-name]} :session}]
+  (println "deleting:" user-name room-name)
   (do
     (remove-user! room-name user-name)
-    (when (>= 0 (count (:users (site/get-room @site room-name))))
-      (remove-room! room-name))
-    (assoc (response/redirect "/")
+    (assoc (json-success-response)
            :session nil)))
 
+;; retemplate this page so that we can embed token data to make
+;; repeated log in faster
 (defn home-handler [{:keys [params session] :as req}]
   (html-success-response (slurp "resources/app/index.html")))
 
@@ -191,32 +224,36 @@
       :rooms rooms})))
 
 (defn list-users-handler [room-name]
-  (if-not (site/room-exists? @site room-name)
-    (json-bad-request
-     {:message (str room-name " does not exist!")})
-    (let [usernames (rooms/list-usernames
-                     (site/get-room @site room-name))]
-      (json-success-response
-       {:userCount (count usernames)
-        :users usernames}))))
+  (with-room room-name
+    (fn [room]
+      (let [usernames (rooms/list-usernames room)]
+        (json-success-response
+         {:userCount (count usernames)
+          :users usernames})))))
+
+(defn get-user-info-handler [room-name user-name]
+  (with-room room-name
+    (fn [room]
+      (let [user (rooms/get-user user-name)]
+        (json-success-response user)))))
 
 ;;; ROUTES
 
 (def room-routes
   (context "/api/rooms" []
            (GET "/list" req (list-rooms-handler req))
-           (GET "/users/:room-name" [room-name]
+           (GET "/info/users/:room-name" [room-name]
                 (list-users-handler room-name))
-           (POST "/join" req
-                 (create-room-and-join-handler req))
-           (POST "/connect" req
-                 (connect-handler req))
-           (DELETE "/quit/:room-name/:user-name" [room-name user-name]
-                   (remove-user-handler room-name user-name))))
+           (GET "/info/:room-name/:user-name" [room-name user-name]
+                (get-user-info-handler room-name user-name))                     
+           ))
 
 (def routes
-  (compojure/routes
+  (compojure/routes   
    room-routes
+   (POST "/api/authorize" req (auth-handler req))
+   (GET "/api/connect" req (connect-handler req))
+   (DELETE "/api/quit" req (remove-user-handler req))
    (GET "*" [] home-handler)))
 
 (def app-routes
@@ -225,8 +262,9 @@
       (content/wrap-content-type)
       (params/wrap-params)
       (json/wrap-json-body)
-      (session/wrap-session)))
-
+      (session/wrap-session {:cookie-name "Pando"
+                             :cookie-attrs
+                             {:max-age cookie-lifetime}})))
 
 (comment
 

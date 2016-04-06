@@ -29,7 +29,7 @@
 (defn user-count [{users :users}]
   (reduce (fn [acc _] (inc acc)) 0 users))
 
-(defn add-user [{users :users :as room} username valid-length]
+(defn upsert-user [{users :users :as room} username valid-length]
   (let [new-coord (tenney/memo-next-coord (map :coord (vals users)))
         timeout   (t/plus (t/now) valid-length)]
     (assoc-in room [:users username]

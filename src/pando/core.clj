@@ -78,12 +78,6 @@
 
 ;;; SITE-LEVEL ROOM AND USER MANIPULATION
 
-(defn add-user! [room-name user-name]
-  (swap! site (fn [s]
-                (site/modify-room
-                 s room-name
-                 #(rooms/add-user % user-name (t/millis cookie-lifetime))))))
-
 (defn remove-user! [room-name user-name]
   (println "removing user:" user-name "from room:" room-name)
   (swap! site
@@ -115,12 +109,14 @@
       (do (println "no r")
           message))))
 
-(defn create-and-join! [room-name user-name]
+(defn create-room-and-auth! [room-name user-name]
   (println "authorizing" user-name "for" room-name)
   (let [resp (json-success-response {:roomName room-name :user user-name})]
     (if (is-observer? user-name)
       ;; don't "log in" an observer
-      (assoc resp :session {:user-name user-name :room-name room-name})
+      (assoc resp :session
+             {:user-name user-name
+              :room-name room-name})
       (do        
         (swap! site
                (fn [s]
@@ -128,16 +124,17 @@
                      (site/maybe-add-room room-name)
                      (site/modify-room
                       room-name
-                      #(rooms/add-user % user-name (t/seconds cookie-lifetime))))))
-        (assoc resp
-               :session
-               {:logged-in true :user-name user-name :room-name room-name})))))
+                      #(rooms/upsert-user % user-name (t/seconds cookie-lifetime))))))
+        (assoc resp :session
+               {:logged-in true
+                :user-name user-name
+                :room-name room-name})))))
 
 (defn refresh-user! [room-name user-name]
   (swap! site (fn [s]
                 (site/modify-room
                  s room-name
-                 #(rooms/add-user % user-name (t/seconds cookie-lifetime))))))
+                 #(rooms/upsert-user % user-name (t/seconds cookie-lifetime))))))
 
 ;; HELPERS
 
@@ -183,7 +180,7 @@
              :session nil)
 
       :else
-      (create-and-join! room-name user-name))))
+      (create-room-and-auth! room-name user-name))))
 
 (defn connect-handler [{:keys [session] :as req}]
   (let [room-name (:room-name session)
@@ -191,7 +188,7 @@
     (println "attempting to connect" user-name "to" room-name session)
     (if-not (authorized? session)
       (json-no-permission-response
-       {:message "Your session has expired. Please log in again."})
+       {:message "Your session has expired. Please log in again."})      
       (d/let-flow [conn (d/catch (http/websocket-connection req) (fn [_] nil))]
         (if-not conn
           #'json-non-websocket-response      

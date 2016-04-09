@@ -100,6 +100,19 @@
       (do (println e)
           message))))
 
+(defn connect! [room-name user-name]
+  (fn [conn]
+    ;; handler for disconnects
+    (s/on-closed conn #(remove-user! room-name user-name))
+    
+    ;; chatrooms bus -> websocket
+    (s/connect (bus/subscribe chatrooms room-name) conn)
+    
+    ;; websocket -> chatrooms bus (kind of doseq for streams)
+    (s/consume
+     #(bus/publish! chatrooms room-name (pack-room-shift! user-name room-name %))
+     (s/throttle 10 conn))))
+
 ;; HELPERS
 
 (defn filter-empty-vals [params]
@@ -116,11 +129,27 @@
     (let [room (site/get-room @site room-name)]
       (f room))))
 
-(defn with-websocket-check [req exp]
+(defn with-websocket-check [exp req]
+  (println "websocket check")
   (d/let-flow [conn (d/catch (http/websocket-connection req) (fn [_] nil))]
       (if-not conn
         #'json-non-websocket-response)
-      (exp conn)))
+      #(exp conn)))
+
+(defn with-room-check [exp room-name]
+  (println "room check")
+  (do (when (not (site/room-exists? @site room-name))
+        (add-room! room-name))
+      exp))
+
+(defn with-user-check [exp room-name user-name]
+  (println "user check")
+  (do (when (not (rooms/user-exists? (site/get-room @site room-name) user-name))
+        (add-user! room-name user-name))
+    exp))
+
+(defn run-checks [exp]
+  (apply @exp []))
 
 ;;; HANDLERS
 
@@ -136,45 +165,21 @@
     (with-websocket-check req #(s/connect (bus/subscribe chatrooms room-name) %))
     
     :else
-    (do
-      (when (not (site/room-exists? @site room-name))
-        (add-room! room-name))
-      (when (not (rooms/user-exists? (site/get-room @site room-name) user-name))
-        (add-user! room-name user-name))
-      (with-websocket-check req
-        (fn [conn]          
-          ;; handler for disconnects
-          (s/on-closed conn #(remove-user! room-name user-name))
-          
-          ;; chatrooms bus -> websocket
-          (s/connect (bus/subscribe chatrooms room-name) conn)
-          
-          ;; websocket -> chatrooms bus (kind of doseq for streams)
-          (s/consume
-           #(bus/publish! chatrooms room-name (pack-room-shift! user-name room-name %))
-           (s/throttle 10 conn)))))))
+    (run-checks
+     (-> (connect! room-name user-name)
+         (with-websocket-check req)
+         (with-room-check room-name)
+         (with-user-check room-name user-name)))))
 
 (defn reconnect-handler [req room-name user-name]
   (println "reconnecting" user-name "to" room-name)
   (if (is-observer? user-name)
-    (with-websocket-check req #(s/connect (bus/subscribe chatrooms room-name) %))
-    (do
-      (when (not (site/room-exists? @site room-name))
-        (add-room! room-name))
-      (when (not (rooms/user-exists? (site/get-room @site room-name) user-name))
-        (add-user! room-name user-name))
-      (with-websocket-check req
-        (fn [conn]          
-          ;; handler for disconnects
-          (s/on-closed conn #(remove-user! room-name user-name))
-          
-          ;; chatrooms bus -> websocket
-          (s/connect (bus/subscribe chatrooms room-name) conn)
-          
-          ;; websocket -> chatrooms bus (kind of doseq for streams)
-          (s/consume
-           #(bus/publish! chatrooms room-name (pack-room-shift! user-name room-name %))
-           (s/throttle 10 conn)))))))
+    (with-websocket-check req #(s/connect (bus/subscribe chatrooms room-name) %))    
+    (run-checks
+     (-> (connect! room-name user-name)
+         (with-websocket-check req)
+         (with-room-check room-name)
+         (with-user-check room-name user-name)))))
 
 (defn remove-user-handler [req]
   (let [user-name  (get-in req [:body "user-name"])
@@ -240,4 +245,5 @@
 
   (def s (http/start-server #'app-routes {:port 10001}))
   (.close s)
+  
   )

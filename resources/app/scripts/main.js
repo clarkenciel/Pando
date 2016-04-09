@@ -1,11 +1,21 @@
 var target = document.getElementById('app');
 
-// var logout = function () {
-//   m.request({ method: "DELETE",
-//               url: "/api/rooms/quit" }).
-//     then(function () { console.log("we quit!"); }).
-//     catch(function (e) { console.log("we didn't quit! ", e) });
-// };
+var Room = function (roomName, userName) {
+  return {
+    name: m.prop(roomName || ""),
+    user: m.prop(userName || ""),
+    socket: m.prop(null),
+    errors: m.prop([]),
+    messages: m.prop([]),
+    currentMessage: m.prop("")
+  };
+};
+
+var App =  {
+  socket: null,
+  room: null,
+  reconnect: false
+};
 
 var makeElement = function (ele, label) {
   return function (x) { return m(ele, label + x); };
@@ -49,28 +59,39 @@ var RoomList = function () {
     });
 };
 
-var Room = function (roomName, userName) {
-  this.name = m.prop(roomName || "");
-  this.user = m.prop(userName || "");
-  this.socket = m.prop(null);
-  this.errors = m.prop([]);
-  this.messages = m.prop([]);
-  this.currentMessage = m.prop("");
+Room.connect = function (room) {
+  var socketAddr;
+  if (!App.reconnect)
+    socketAddr = 'ws://' + window.location.host + '/api/connect/' + room.name() + '/' + room.user();
+  else
+    socketAddr = 'ws://' + window.location.host + '/api/reconnect/' + room.name() + '/' + room.user();
+  App.socket = new WebSocket(socketAddr);
+  App.socket.onmessage = function (message) {
+    App.room.messages().push(JSON.parse(message.data));
+    m.redraw();
+    console.log("socket callback ", message, App.room.messages());
+  };
+  App.socket.onclose = function (x) {
+    console.log("closing socket", x);
+  };
+  App.socket.onerror = function (e) {
+    console.log("socket error", e);
+    App.room.errors().push(e.message);
+    m.route("/");
+  };
+  App.socket.onopen = function (x) {
+    console.log("open socket", x);
+    m.route("/rooms/"+App.room.name());
+  };
 };
 
-Room.join = function (room) {
-  m.request({ method: "POST",
-              url: "/api/authorize",
-              data: { "room-name": room.name(),
-                      "user-name": room.user() }}).
-    then(function (data) {
-      console.log(data);
-      var redirect = "/rooms/" + data.roomName + "/" + data.user;
-      m.route(redirect);
-    }).
-    catch(function (error) {
-      room.errors().push(error.message);
-    });
+Room.quit = function (room) {
+  m.request({ method: "DELETE",
+              url: "/api/quit",
+              data: { "user-name": room.user(),
+                      "room-name": room.name() }}).
+    then(function () { console.log("successfully logged out"); }).
+    catch(function (e) { console.log("log out error:", e.message); });
 };
 
 Room.formView = function (room, roomList) {
@@ -93,8 +114,8 @@ Room.formView = function (room, roomList) {
              concat(roomList.data().list.map(modelNameRadio(room))).
              concat(m("br")).
              concat(m("div#button",
-                      { onclick: function () { Room.join(room); }},
-                     "Join"))));
+                      { onclick: function () { Room.connect(room); }},
+                     "Connect"))));
 };
 
 Room.renderMessage = function (message) {
@@ -105,72 +126,84 @@ Room.renderMessage = function (message) {
 
 Room.conversation = {
   controller: function () {
-    var socketAddr = 'ws://' + window.location.host + '/api/connect';
-    var self = this;    
 
-    this.room = new Room(m.route.param("roomName"),
-                         m.route.param("userName"));
-    
-    this.socket = new WebSocket(socketAddr);
-    this.socket.onmessage = function (message) {
-      self.room.messages().push(JSON.parse(message.data));
-      m.redraw();
-      console.log("socket callback ", message, self.room.messages());
+    // store data if the page refreshes and allow reconnect
+    window.onbeforeunload = function (e) {
+      var navType = window.performance.navigation.type;
+      console.log("navtype:", navType);
+      if (navType == 1 || navType == 0) {
+        sessionStorage.setItem('room-name', App.room.name());
+        sessionStorage.setItem('user-name', App.room.user());
+        sessionStorage.setItem('reconnect', JSON.stringify(true));
+        console.log("refresh detected, stored:", sessionStorage.getItem('room'));
+      };
     };
-    this.socket.onclose = function (x) {
-      console.log("closing socket", x);
-    };
-    this.socket.onerror = function (e) {
-      console.log("socket error", e);
+
+    // handle back button navigation as a log out
+    window.onpopstate = function (e) {
+      console.log("Back navigation detected, logging out", e);      
+      App.reconnect = false;
+      App.socket.close();
       m.route("/");
     };
-    window.onbeforeunload = function () {
-      self.socket.close();
-    };
     
-    console.log("Room.conversation ",
-                this.room.name(),
-                this.room.user(),
-                this.socket);
+    // restore from storage
+    if (App.room === null || typeof App.room === "undefined") {
+      var storedRoom = new Room(sessionStorage.getItem('room-name'),
+                                sessionStorage.getItem('user-name'));
+      App.reconnect = JSON.parse(sessionStorage.getItem('reconnect'));
+      console.log("sored room", storedRoom);                                  
+      if (storedRoom !== null) {
+        App.room = storedRoom;
+      }
+      else {
+        m.route("/");
+      };
+    };
+    if (App.socket === null || typeof App.socket === "undefined")
+      Room.connect(App.room);
+    sessionStorage.clear();
+    console.log(App);
   },
   
   view: function (ctl) {
     return m("div.container",[
-      m("div#messages", ctl.room.messages().map(Room.renderMessage)),
+      m("div#messages", App.room.messages().map(Room.renderMessage)),
       m("div#messageForm", [
         m("form", [
           m("textarea#messageBody",
-            { oninput: m.withAttr("value", ctl.room.currentMessage) },
-            ctl.room.currentMessage()),
+            { oninput: m.withAttr("value", App.room.currentMessage) },
+            App.room.currentMessage()),
           m("div.button",
             {onclick: function () {
               var out = {
-                "message": ctl.room.currentMessage,
-                "userName": ctl.room.user,
-                "roomName": ctl.room.name,
+                "message": App.room.currentMessage,
+                "userName": App.room.user,
+                "roomName": App.room.name,
                 "frequency": 0
               };    
-              ctl.socket.send(JSON.stringify(out));
-              ctl.room.currentMessage("");
+              App.socket.send(JSON.stringify(out));
+              App.room.currentMessage("");
             }},
             "Send")])])]);
   }
 };
 
 var Index = {
-  controller: function () {
+  controller: function () {    
+    App.room = App.room || new Room();
+    App.reconnect = false;
     this.rooms = new RoomList();
-    this.room = new Room();
     console.log("Index controller ", this.rooms);
   },
   view: function (ctl) {
     return m("div.container", [
-      displayErrors(ctl.room),
-      Room.formView(ctl.room, ctl.rooms)]);      
+      displayErrors(App.room),
+      Room.formView(App.room, ctl.rooms)]);      
   }
 };
 
 m.route(target, "/", {
   "/": Index,
-  "/rooms/:roomName/:userName": Room.conversation
+  "/rooms/:roomName": Room.conversation
 });

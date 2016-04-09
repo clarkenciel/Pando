@@ -29,12 +29,9 @@
 (defn user-count [{users :users}]
   (reduce (fn [acc _] (inc acc)) 0 users))
 
-(defn upsert-user [{users :users :as room} username valid-length]
-  (let [new-coord (tenney/memo-next-coord (map :coord (vals users)))
-        timeout   (t/plus (t/now) valid-length)]
-    (assoc-in room [:users username]
-              {:coord new-coord
-               :timeout timeout})))
+(defn upsert-user [{users :users :as room} username]
+  (let [new-coord (tenney/memo-next-coord (map :coord (vals users)))]
+    (assoc-in room [:users username] {:coord new-coord})))
 
 (defn remove-user [{users :users :as room} username]
   (assoc room :users (dissoc users username)))

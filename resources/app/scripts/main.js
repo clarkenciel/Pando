@@ -87,18 +87,15 @@ Room.connect = function (room) {
   
   App.socket = new WebSocket(socketAddr);
   App.socket.onmessage = function (message) {
-    var messages = document.getElementById("messages");
     App.room.messages().push(JSON.parse(message.data));
     m.redraw();
+    var messages = document.getElementById("messages");
     messages.scrollTop = messages.scrollHeight;    
-    console.log("socket callback ", message, App.room.messages());
   };
   App.socket.onopen = function (x) {
-    console.log("open socket", x);
     m.route("/rooms/"+App.room.name());
   };
   App.socket.onerror = function (e) {
-    console.log("socket error");
     App.socket = null;
     m.route("/");
   };
@@ -207,7 +204,8 @@ Room.conversation = {
             m("textarea#messageBody",
               { oninput: m.withAttr("value", App.room.currentMessage) },
               App.room.currentMessage()),
-            button(m("img[src='../img/send.svg']"),
+            button(m("div.imageHolder",
+                     m("img[src='../img/send.svg']")),
                    "#messageSend", Room.sendMessage(App))])])]);
     }
     else
@@ -224,6 +222,7 @@ var Index = {
   },
   view: function (ctl) {
     return m("div.container", [
+      m("div#appTitle", "Pando"),
       displayErrors(App.room),
       Room.formView(App.room, ctl.rooms)]);      
   }

@@ -178,12 +178,14 @@
 (defn reconnect-handler [req room-name user-name]
   (run-checks
    (if (is-observer? user-name)
-     (with-websocket-check req
-       #(s/connect (bus/subscribe chatrooms room-name) %))
-     (-> (connect! room-name user-name)
-         (with-websocket-check req)
-         (with-room-check room-name)
-         (with-user-check room-name user-name)))))
+     (run-checks
+      (-> #(s/connect (bus/subscribe chatrooms room-name) %)
+          (with-websocket-check req)))
+     (run-checks
+      (-> (connect! room-name user-name)
+          (with-websocket-check req)
+          (with-room-check room-name)
+          (with-user-check room-name user-name))))))
 
 (defn remove-user-handler [req]
   (let [user-name  (get-in req [:body "user-name"])

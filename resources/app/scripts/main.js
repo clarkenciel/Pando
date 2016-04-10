@@ -17,10 +17,6 @@ var App =  {
   reconnect: false
 };
 
-var makeElement = function (ele, label) {
-  return function (x) { return m(ele, label + x); };
-};
-
 var displayError = function (error) {
   return m("div.error", error);
 };
@@ -34,16 +30,37 @@ var displayErrors = function (model) {
            model.errors().splice(0,model.errors().length).map(displayError));
 };
 
+var label = function (labelText, dataName) {
+  return [m("br"),
+          m("label", { for: dataName }, labelText),
+          m("br")];
+};
+
+var button = function (buttonText, buttonCss, onClick) {
+  return [m("br"),
+          m("div.button" + buttonCss,
+            { onclick: onClick },
+            buttonText)];
+};
+
+var textInput = function (labelName, dataName, attr) {
+  return label(labelName, dataName).
+    concat([m("input", { type: "text",
+                         name: dataName,
+                         oninput: m.withAttr("value", attr),
+                         value: attr() })]);
+};
+
 var modelNameRadio = function (model) {
   return function (room) {
     console.log(room);
-    return m("div.roomRadio",
-             m("input",
-               { type: "radio",
-                 name: "roomName",
-                 onclick: m.withAttr("value", model.name),
-                 value: room.roomName }),
-             "Room: " + room.roomName + ", user count: " + room.userCount);
+    return [m("div.roomRadio",
+              m("input",
+                { type: "radio",
+                  name: "roomName",
+                  onclick: m.withAttr("value", model.name),
+                  value: room.roomName }),
+              "Room: " + room.roomName + ", user count: " + room.userCount)];
   };
 };
 
@@ -65,23 +82,23 @@ Room.connect = function (room) {
     socketAddr = 'ws://' + window.location.host + '/api/connect/' + room.name() + '/' + room.user();
   else
     socketAddr = 'ws://' + window.location.host + '/api/reconnect/' + room.name() + '/' + room.user();
+
+  console.log(socketAddr);
+  
   App.socket = new WebSocket(socketAddr);
   App.socket.onmessage = function (message) {
     App.room.messages().push(JSON.parse(message.data));
     m.redraw();
     console.log("socket callback ", message, App.room.messages());
   };
-  App.socket.onclose = function (x) {
-    console.log("closing socket", x);
-  };
-  App.socket.onerror = function (e) {
-    console.log("socket error", e);
-    App.room.errors().push(e.message);
-    m.route("/");
-  };
   App.socket.onopen = function (x) {
     console.log("open socket", x);
     m.route("/rooms/"+App.room.name());
+  };
+  App.socket.onerror = function (e) {
+    console.log("socket error");
+    App.socket = null;
+    m.route("/");
   };
 };
 
@@ -95,33 +112,46 @@ Room.quit = function (room) {
 };
 
 Room.formView = function (room, roomList) {
-  return m("div#roomForm",
-           m("form", [
-             m("label", { for: "userName" }, "User Name:"),
-             m("input", { type: "text",
-                          name: "userName",
-                          oninput: m.withAttr("value", room.user),
-                          value: room.user() }),
-             m("br"),
-             m("label", { for: "roomName" }, "Create a new room ..."),
-             m("input", { type: "text",
-                          name: "roomName",
-                          oninput: m.withAttr("value", room.name),
-                          value: room.name() }),
-             m("br"),
-             m("label", { for: "roomName" }, "... or select an existing room"),
-             m("br")].
-             concat(roomList.data().list.map(modelNameRadio(room))).
-             concat(m("br")).
-             concat(m("div#button",
-                      { onclick: function () { Room.connect(room); }},
-                     "Connect"))));
+  return m("div#roomFormHolder",
+           m("form#roomForm",
+             [textInput("User Name:", "userName", room.user),
+              textInput("Create a new room ...", "roomName", room.name),
+              label("... or select an existing room", "roomName"),
+              roomList.data().list.map(modelNameRadio(room)),
+              button("Connect", "#connect",
+                     function () {
+                       if (room.user() == "observer" &&
+                           !roomList.data().list.some(function (v) {                             
+                             return v.roomName == room.name(); })) {
+                         room.errors().push("You can only observe a room with at least one member");
+                         m.route("/");
+                       }
+                       else if (room.name() == "" || room.user() == "") {
+                         room.errors().push("Please provide both a room name and a user name");
+                         m.route("/");
+                       }
+                       else
+                         Room.connect(room);
+                     })]));
 };
 
 Room.renderMessage = function (message) {
   return m("div.message", [
     m("div.message.username", message.userName),
     m("div.message.body", message.message)]);
+};
+
+Room.sendMessage = function (app) {
+  return function () {
+    var out = {
+      "message": app.room.currentMessage,
+      "userName": app.room.user,
+      "roomName": app.room.name,
+      "frequency": 0
+    };    
+    app.socket.send(JSON.stringify(out));
+    app.room.currentMessage("");
+  };
 };
 
 Room.conversation = {
@@ -134,7 +164,7 @@ Room.conversation = {
       if (navType == 1 || navType == 0) {
         sessionStorage.setItem('room-name', App.room.name());
         sessionStorage.setItem('user-name', App.room.user());
-        sessionStorage.setItem('reconnect', JSON.stringify(true));
+        sessionStorage.setItem('reconnect', JSON.stringify(true));        
         console.log("refresh detected, stored:", sessionStorage.getItem('room'));
       };
     };
@@ -167,25 +197,18 @@ Room.conversation = {
   },
   
   view: function (ctl) {
-    return m("div.container",[
-      m("div#messages", App.room.messages().map(Room.renderMessage)),
-      m("div#messageForm", [
-        m("form", [
-          m("textarea#messageBody",
-            { oninput: m.withAttr("value", App.room.currentMessage) },
-            App.room.currentMessage()),
-          m("div.button",
-            {onclick: function () {
-              var out = {
-                "message": App.room.currentMessage,
-                "userName": App.room.user,
-                "roomName": App.room.name,
-                "frequency": 0
-              };    
-              App.socket.send(JSON.stringify(out));
-              App.room.currentMessage("");
-            }},
-            "Send")])])]);
+    if (App.room.user() != "observer") {
+      return m("div.container",[
+        m("div#messages", App.room.messages().map(Room.renderMessage)),
+        m("div#messageForm", [
+          m("form", [
+            m("textarea#messageBody",
+              { oninput: m.withAttr("value", App.room.currentMessage) },
+              App.room.currentMessage()),
+            button("Send", "", Room.sendMessage(App))])])]);
+    }
+    else
+      return m("div.container",m("div#messages", App.room.messages().map(Room.renderMessage)));
   }
 };
 

@@ -63,8 +63,7 @@
 
 ;;; SITE-LEVEL ROOM AND USER MANIPULATION
 
-(defn remove-user! [room-name user-name]
-  (println "removing user:" user-name "from room:" room-name)
+(defn remove-user! [room-name user-name]  
   (swap! site
          (fn [s]
            (let [new-s (site/modify-room s room-name #(rooms/remove-user % user-name))]
@@ -72,8 +71,7 @@
                (site/remove-room new-s room-name)
                new-s)))))
 
-(defn add-user! [room-name user-name]
-  (println "adding user:" user-name "to room:" room-name)
+(defn add-user! [room-name user-name]  
   (swap! site (fn [s] (site/modify-room s room-name #(rooms/upsert-user % user-name)))))
 
 (defn add-room! [room-name]
@@ -87,14 +85,12 @@
                 % room-name
                 (partial rooms/shift-room freq))))
 
-(defn pack-room-shift! [user-name room-name message]
-  (println user-name room-name message)
+(defn pack-room-shift! [user-name room-name message]  
   (try
     (let [m (chesh/decode message)
           r (site/get-room
              (shift-room! room-name (get m "frequency"))
-             room-name)]
-      (println message)
+             room-name)] 
       (chesh/generate-string (assoc m "newRoot" (:root r))))
     (catch Exception e
       (do (println e)
@@ -129,21 +125,18 @@
     (let [room (site/get-room @site room-name)]
       (f room))))
 
-(defn with-websocket-check [exp req]
-  (println "websocket check")
+(defn with-websocket-check [exp req]  
   (d/let-flow [conn (d/catch (http/websocket-connection req) (fn [_] nil))]
       (if-not conn
         #'json-non-websocket-response)
       #(exp conn)))
 
-(defn with-room-check [exp room-name]
-  (println "room check")
+(defn with-room-check [exp room-name]  
   (do (when (not (site/room-exists? @site room-name))
         (add-room! room-name))
       exp))
 
-(defn with-user-check [exp room-name user-name]
-  (println "user check")
+(defn with-user-check [exp room-name user-name]  
   (do (when (not (rooms/user-exists? (site/get-room @site room-name) user-name))
         (add-user! room-name user-name))
     exp))
@@ -157,12 +150,23 @@
 ;; is available they go through, if it is not, they are rejected
 (defn connect-handler [req room-name user-name]
   (cond
+    (not (and room-name user-name))
+    (json-bad-request
+     {:message "Please provide both a room name a user name"})
+    
     (not (user-name-available? @site room-name user-name))
     (json-no-permission-response
      {:message "Your session has expired. Please log in again."})
 
+    (and (not (site/room-exists? @site room-name))
+         (is-observer? user-name))
+    (json-bad-request
+     {:message "You can only observe a room with at least one member."})
+
     (is-observer? user-name)
-    (with-websocket-check req #(s/connect (bus/subscribe chatrooms room-name) %))
+    (run-checks
+     (-> #(s/connect (bus/subscribe chatrooms room-name) %)
+         (with-websocket-check req)))
     
     :else
     (run-checks
@@ -172,10 +176,10 @@
          (with-user-check room-name user-name)))))
 
 (defn reconnect-handler [req room-name user-name]
-  (println "reconnecting" user-name "to" room-name)
-  (if (is-observer? user-name)
-    (with-websocket-check req #(s/connect (bus/subscribe chatrooms room-name) %))    
-    (run-checks
+  (run-checks
+   (if (is-observer? user-name)
+     (with-websocket-check req
+       #(s/connect (bus/subscribe chatrooms room-name) %))
      (-> (connect! room-name user-name)
          (with-websocket-check req)
          (with-room-check room-name)

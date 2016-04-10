@@ -1,5 +1,49 @@
 var target = document.getElementById('app');
 
+var audioCtx = new AudioContext();
+
+var Utils = {};
+
+Utils.constrainFrequency = function (lo, hi, frequency) {
+  if (typeof frequency === "undefined") return 0;
+  if (!isFinite(frequency)) return 0;
+  while (frequency < lo || hi < frequency) {
+    if (frequency < lo) frequency *= 2;
+    if (frequency > hi) frequency *= 0.5;
+  };
+  console.log("freq:", frequency);
+  return frequency;
+};
+
+Utils.coordToFrequency = function (frequency, dimensions, coord) {
+  var product = 1;
+  for (var i = 0; i < dimensions.length; i++)
+    product *= Math.pow(dimensions[i], coord[i]);
+  return Utils.constrainFrequency(
+    400, 1200,
+    Math.abs(frequency * product));
+};
+
+var Sound = function (fundamental, dimensions, coord) {
+  var out = {
+    _coord: coord,
+    _dimensions: dimensions,
+    gain: audioCtx.createGain(),
+    osc: audioCtx.createOscillator(),
+    isStarted: false,
+    updateFreq: function (fundamental) {
+      this.osc.frequency.value = Utils.coordToFrequency(fundamental, this._dimensions, this._coord);
+    },
+    start: function () { if (!this.isStarted) this.osc.start(); },
+    stop: function () { if (!this.isStarted) this.osc.stop(); }
+  };
+  out.gain.gain.value = 0.3;
+  out.updateFreq(fundamental);
+  out.gain.connect(audioCtx.destination);
+  out.osc.connect(out.gain);
+  return out;
+};
+
 var Room = function (roomName, userName) {
   return {
     name: m.prop(roomName || ""),
@@ -14,7 +58,8 @@ var Room = function (roomName, userName) {
 var App =  {
   socket: null,
   room: null,
-  reconnect: false
+  reconnect: false,
+  sound: null
 };
 
 var displayError = function (error) {
@@ -154,6 +199,16 @@ Room.sendMessage = function (app) {
   };
 };
 
+Room.makeSound = function (app) {
+  return m.request({ method: "GET",
+                     url: "/api/rooms/info/"+app.room.name()+"/"+app.room.user() }).
+    then(function (resp) {
+      app.sound = new Sound(resp.fundamental, resp.dimensions, resp.coord);
+    }).catch(function (e) {
+      console.log("make sound error", e);
+    });
+};
+
 Room.conversation = {
   controller: function () {
 
@@ -192,6 +247,12 @@ Room.conversation = {
     };
     if (App.socket === null || typeof App.socket === "undefined")
       Room.connect(App.room);
+
+    Room.makeSound(App).
+      then(function () {
+        App.sound.start();
+        console.log("starting", App.sound);
+      });
     sessionStorage.clear();
   },
   
@@ -217,6 +278,8 @@ var Index = {
   controller: function () {    
     App.room = App.room || new Room();
     App.reconnect = false;
+    if (App.sound !== null && App.sound.isStarted)
+      App.sound.stop();
     this.rooms = new RoomList();
     console.log("Index controller ", this.rooms);
   },

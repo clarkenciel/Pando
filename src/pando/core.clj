@@ -216,8 +216,11 @@
 (defn get-user-info-handler [room-name user-name]
   (with-room room-name
     (fn [room]
-      (let [user (rooms/get-user user-name)]
-        (json-success-response user)))))
+      (let [user (rooms/get-user room user-name)]
+        (json-success-response
+         {:fundamental (:root room)
+          :coord       (:coord (:coord user))
+          :dimensions  (:dimensions room)})))))
 
 ;;; ROUTES
 

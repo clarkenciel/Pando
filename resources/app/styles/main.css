@@ -1,0 +1,154 @@
+/* GENERAL */
+
+body, footer {
+    background-color: #333333;
+    font-size: 110%;
+    color: #CCCCCC;
+    font-family:monospace;
+    overflow-y: hidden;
+}
+
+footer {
+    font-family: monospace;
+    font-size: 70%;
+    padding: 10px;
+}
+
+footer div {
+    display: inline-block;
+    margin-right: 30px;
+}
+
+form {
+    padding:0;
+    margin:0;
+}
+
+a {
+    color: #448800;
+}
+
+input[type=text], textarea {
+    background-color: #555555;
+    color: #CCCCCC;
+    border: none;
+    font-family: monospace;
+    height: 30px;
+    width: 100%;
+    border-radius: 1px;
+    border-bottom: solid 2px;
+    outline: #DDDDDD;
+}
+
+div#app {
+}
+
+.button {
+    background-color: #448800;
+    margin: 2%;
+    padding: 1%;
+    text-align: center;
+}
+
+/* MESSAGES */
+
+#messages {
+    overflow-y: auto;
+    height:76%;
+    vertical-align:top;
+    width: 100%;
+}
+
+#messageForm {
+    /* padding:1%; */
+    width:100%;
+    height: 20%;
+    margin:0;
+}
+
+#messageBody {
+    display:inline-block;
+    width: 80%;
+    height: 100%;
+    margin:0;
+    vertical-align:top;
+}
+
+#messageSend {
+    display:inline-block;
+    background-color: transparent;
+    height:100%;
+    width: 15%;
+    line-height: 100%;
+    text-align: center;
+    margin:0;
+    margin-left: 1%;
+    padding-top:4%;
+}
+
+#messageSend > img {
+    height:50%;
+    width: 50%;
+    margin:0;
+    padding:0;
+    vertical-align:middle;
+}
+
+.message {    
+    word-wrap: break-word;
+    padding:0;
+    width:90%;
+    margin-bottom: 1%;
+    /* box-shadow: 5px 5px 5px black; */
+}
+
+.message.username, .message.body {
+    padding:1%;
+    border: 0px;
+    margin-right:5px;
+    padding:0.5%;
+}
+
+.message.username {
+    background-color: #444444;
+    display:inline-block;
+    width:10%;
+    
+    text-align:right;
+    vertical-align:top;
+}
+
+.message.body {
+    background-color: #222222;
+    width:85%;
+    display:inline-block;
+}
+
+.message.body p {
+    margin:0;
+    padding:0;
+}
+
+/* FORMS */
+#roomFormHolder { }
+
+#roomForm { }
+
+textarea {
+    resize: none;
+}
+
+label {
+    font-weight: bold;
+    font-size: 25px;    
+}
+
+.roomRadio { }
+
+/* ERRORS */
+
+#notifications { }
+
+.error {
+    background-color: red;
+}

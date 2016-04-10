@@ -22,7 +22,7 @@ var displayError = function (error) {
 };
 
 var displayErrors = function (model) {
-  return m("div#messages",
+  return m("div#notifications",
            { style: (function () {
              if (model.errors().length > 0) return "display: block";
              else return "display: none"; })()
@@ -37,10 +37,10 @@ var label = function (labelText, dataName) {
 };
 
 var button = function (buttonText, buttonCss, onClick) {
-  return [m("br"),
-          m("div.button" + buttonCss,
+  return [m("div.button" + buttonCss,
             { onclick: onClick },
-            buttonText)];
+            buttonText),
+         m("br")];
 };
 
 var textInput = function (labelName, dataName, attr) {
@@ -87,8 +87,10 @@ Room.connect = function (room) {
   
   App.socket = new WebSocket(socketAddr);
   App.socket.onmessage = function (message) {
+    var messages = document.getElementById("messages");
     App.room.messages().push(JSON.parse(message.data));
     m.redraw();
+    messages.scrollTop = messages.scrollHeight;    
     console.log("socket callback ", message, App.room.messages());
   };
   App.socket.onopen = function (x) {
@@ -137,8 +139,9 @@ Room.formView = function (room, roomList) {
 
 Room.renderMessage = function (message) {
   return m("div.message", [
-    m("div.message.username", message.userName),
-    m("div.message.body", message.message)]);
+    m("div.message.username", message.userName + ":"),
+    m("div.message.body",
+      m("p",message.message))]);
 };
 
 Room.sendMessage = function (app) {
@@ -193,7 +196,6 @@ Room.conversation = {
     if (App.socket === null || typeof App.socket === "undefined")
       Room.connect(App.room);
     sessionStorage.clear();
-    console.log(App);
   },
   
   view: function (ctl) {
@@ -205,7 +207,8 @@ Room.conversation = {
             m("textarea#messageBody",
               { oninput: m.withAttr("value", App.room.currentMessage) },
               App.room.currentMessage()),
-            button("Send", "", Room.sendMessage(App))])])]);
+            button(m("img[src='../img/send.svg']"),
+                   "#messageSend", Room.sendMessage(App))])])]);
     }
     else
       return m("div.container",m("div#messages", App.room.messages().map(Room.renderMessage)));

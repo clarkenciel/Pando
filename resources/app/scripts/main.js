@@ -123,26 +123,36 @@ var RoomList = function () {
 
 Room.connect = function (room) {
   var socketAddr;
-  if (!App.reconnect)
-    socketAddr = 'ws://' + window.location.host + '/api/connect/' + room.name() + '/' + room.user();
-  else
-    socketAddr = 'ws://' + window.location.host + '/api/reconnect/' + room.name() + '/' + room.user();
+  socketAddr = 'ws://' + window.location.host + '/api/connect/' + room.name() + '/' + room.user();
 
   console.log(socketAddr);
   
   App.socket = new WebSocket(socketAddr);
   App.socket.onmessage = function (message) {
-    App.room.messages().push(JSON.parse(message.data));
+    var dat = JSON.parse(message.data);
+    App.room.messages().push(dat);
     m.redraw();
     var messages = document.getElementById("messages");
-    messages.scrollTop = messages.scrollHeight;    
+    messages.scrollTop = messages.scrollHeight;
+    if (dat.userName != App.room.user())
+      App.sound.updateFreq(dat.newRoot);
   };
   App.socket.onopen = function (x) {
     m.route("/rooms/"+App.room.name());
+    Room.makeSound(App).
+      then(function () {
+        App.sound.start();
+        console.log("starting", App.sound);
+      });
   };
   App.socket.onerror = function (e) {
     App.socket = null;
     m.route("/");
+  };
+  App.socket.onclose = function (e) {
+    App.socket = null;
+    if (App.sound != null)
+      App.sound.stop();
   };
 };
 
@@ -219,7 +229,6 @@ Room.conversation = {
       if (navType == 1 || navType == 0) {
         sessionStorage.setItem('room-name', App.room.name());
         sessionStorage.setItem('user-name', App.room.user());
-        sessionStorage.setItem('reconnect', JSON.stringify(true));        
         console.log("refresh detected, stored:", sessionStorage.getItem('room'));
       };
     };
@@ -236,7 +245,6 @@ Room.conversation = {
     if (App.room === null || typeof App.room === "undefined") {
       var storedRoom = new Room(sessionStorage.getItem('room-name'),
                                 sessionStorage.getItem('user-name'));
-      App.reconnect = JSON.parse(sessionStorage.getItem('reconnect'));
       console.log("sored room", storedRoom);                                  
       if (storedRoom !== null) {
         App.room = storedRoom;
@@ -245,14 +253,9 @@ Room.conversation = {
         m.route("/");
       };
     };
-    if (App.socket === null || typeof App.socket === "undefined")
+    if (App.socket === null || typeof App.socket === "undefined") {
       Room.connect(App.room);
-
-    Room.makeSound(App).
-      then(function () {
-        App.sound.start();
-        console.log("starting", App.sound);
-      });
+    };
     sessionStorage.clear();
   },
   

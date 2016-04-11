@@ -1,4 +1,5 @@
 (ns pando.core
+  (:gen-class)
   (:require
    [compojure.core :as compojure
     :refer [DELETE PUT GET POST context]]
@@ -175,18 +176,6 @@
          (with-room-check room-name)
          (with-user-check room-name user-name)))))
 
-(defn reconnect-handler [req room-name user-name]
-  (run-checks
-   (if (is-observer? user-name)
-     (run-checks
-      (-> #(s/connect (bus/subscribe chatrooms room-name) %)
-          (with-websocket-check req)))
-     (run-checks
-      (-> (connect! room-name user-name)
-          (with-websocket-check req)
-          (with-room-check room-name)
-          (with-user-check room-name user-name))))))
-
 (defn remove-user-handler [req]
   (let [user-name  (get-in req [:body "user-name"])
         room-name  (get-in req [:body "room-name"])]
@@ -197,7 +186,7 @@
 ;; retemplate this page so that we can embed token data to make
 ;; repeated log in faster
 (defn home-handler [{:keys [params session] :as req}]
-  (html-success-response (slurp "resources/app/index.html")))
+  (html-success-response (slurp (clojure.java.io/resource "app/index.html"))))
 
 (defn list-rooms-handler [req]
   (let [rooms (site/list-rooms-info @site)]
@@ -236,9 +225,7 @@
   (compojure/routes   
    room-routes
    (GET "/api/connect/:room-name/:user-name" [room-name user-name :as req]
-        (connect-handler req room-name user-name))
-   (GET "/api/reconnect/:room-name/:user-name" [room-name user-name :as req]
-        (reconnect-handler req room-name user-name))
+        (connect-handler req room-name user-name))   
    (DELETE "/api/quit" req (remove-user-handler req))
    (GET "*" [] home-handler)))
 
@@ -249,6 +236,12 @@
       (params/wrap-params)
       (json/wrap-json-body)
       (session/wrap-session {:cookie-name "Pando"})))
+
+(defn start [port]
+  (http/start-server #'app-routes {:port port}))
+
+(defn -main [& args]
+  (start 10002))
 
 (comment
 

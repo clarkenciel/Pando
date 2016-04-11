@@ -38,6 +38,6 @@
 
 (defn shift-room [frequency {root :root :as room}]
   (assoc room :root (cond
-                      (> root frequency) (dec root)
-                      (> frequency root) (inc root)
+                      (> root frequency) (- root (* 0.01 (- root frequency)))
+                      (> frequency root) (+ root (* 0.01 (- frequency root)))
                       :else root)))

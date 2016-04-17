@@ -38,7 +38,10 @@ exports.textInput = function (labelName, dataName, attr) {
   return exports.label(labelName, dataName).
     concat([m("input.big_text", { type: "text",
                                   name: dataName,
-                                  oninput: m.withAttr("value", attr),
+                                  oninput: m.withAttr("value",
+                                                      function (value) {
+                                                        attr(value);
+                                                        m.redraw.strategy("none");}),
                                   value: attr() })]);
 };
 
@@ -50,7 +53,8 @@ exports.modelNameRadio = function (model) {
                   name: "roomName",
                   onclick: m.withAttr("value", model.name),
                   value: room.roomName }),
-              "Room: " + room.roomName + ", user count: " + room.userCount)];
+              m("div.radio_label.medium_text",
+                room.roomName + ", users: " + room.userCount))];
   };
 };
 

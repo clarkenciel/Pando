@@ -101,7 +101,8 @@
       (do (println e)
           message))))
 
-(defn connect! [room-name user-name]  
+(defn connect! [room-name user-name]
+  (println "connect!" room-name user-name)
   (fn [conn]
     ;; handler for disconnects
     (s/on-closed
@@ -164,7 +165,7 @@
 ;; Workflow: Client attempts to connect with a given name, if that name
 ;; is available they go through, if it is not, they are rejected
 (defn connect-handler [req room-name user-name]
-  
+  (println "connect-handler" room-name user-name)
   (cond
     (not (and room-name user-name))
     (json-bad-request

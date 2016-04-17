@@ -11,11 +11,11 @@ body, footer {
     background-color: #333333;
     color: #CCCCCC;
     font-family:monospace;
-    overflow-y: hidden;
     margin:0;
 }
 
 footer {
+    overflow-y: hidden;
     font-family: monospace;
     padding: 1%;
     margin-left: 1%;
@@ -29,12 +29,6 @@ footer div {
 
 footer div p {
     margin:0;
-}
-
-form {
-    padding:0;
-    margin:0;
-    height:100%;
 }
 
 a {
@@ -189,11 +183,27 @@ input[type=text], textarea {
 
 #roomForm { }
 
-.roomRadio { }
+.roomRadio {
+    color: #AADD00;
+}
+
+.roomRadio input {
+    height:15px;
+    width:15px;
+    margin:10px;
+}
+
+.radio_label{
+    display: inline-block;    
+}
 
 /* ERRORS */
 
 #notifications {
+    position: absolute;
+    bottom:10%;
+    left:1.5%;
+    width:95%;
     height:auto;
     padding:1%;
 }
@@ -201,6 +211,7 @@ input[type=text], textarea {
 .error {
     text-align:center;
     height:auto;
+    width:auto;
     padding:1%;
     background-color: #CC6B6B;
     color: black;
@@ -213,7 +224,7 @@ input[type=text], textarea {
     left: 0;
     width: 100%;
     height: 100%;
-    z
+    z-index:10;
 }
 
 .overlay_container {
@@ -246,6 +257,15 @@ input[type=text], textarea {
     font-weight:bold;
 }
 
+/* HEIGHT */
+.full_height {
+    height:100%;
+}
+
+.auto_height {
+    height: auto;
+}
+
 /* MOBILE */
 @media only screen and (max-device-width: 480px) {
     .message {
@@ -270,13 +290,17 @@ input[type=text], textarea {
         padding:1%;
         text-align:left;
     }
+
+    .big_text {
+        font-size: 22px;
+    }
     
     .medium_text {
-        font-size: 20px;
+        font-size: 18px;
     }
 
     .small_text {
-        font-size: 18px;
+        font-size: 16px;
     }
 
     .tiny_text {

@@ -38,8 +38,12 @@ exports.formView = function (room, roomList, connectCallback) {
   return m("div#roomFormHolder",
            m("form#roomForm",
              [common.textInput("User Name:", "userName", room.user),
+              m("br"),
               common.textInput("Create a new room ...", "roomName", room.name),
+              m("br"),
               common.label("... or select an existing room", "roomName"),
+              m("br"),
               roomList.data().list.map(common.modelNameRadio(room)),
+              m("br"),
               common.button("Connect", "#connect", function () {connectCallback(room, roomList);})]));
 };

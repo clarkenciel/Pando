@@ -5,7 +5,7 @@
   (html5
    [:head
     [:title "Pando"]
-    [:meta {:name "viewport" :content "initial-scale=1.0, maximum-scale=1.0"}]
+    [:meta {:name "viewport" :content "initial-scale=1.0"}]
     (include-css "/pando/styles/main.min.css")
     ]
    [:body

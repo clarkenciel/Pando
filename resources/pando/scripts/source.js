@@ -112,21 +112,15 @@ Room.conversation = {
     if (App.room === null || typeof App.room === "undefined") {
       var roomName = sessionStorage.getItem('room-name'),
           userName = sessionStorage.getItem('user-name');
-      if (roomName && userName) {
-        console.log("restored room");
-        App.room = new Room(roomName, userName);
-      }      
-      else {        
+
+      if (m.route.param("roomName")) {
         App.room = new Room(m.route.param("roomName"), null);
         console.log("roomname from url, user null", App.room.name());
-      };
-    };
-
-    if ((App.room.name() && App.room.user())
-        &&  
-        (App.socket === null || typeof App.socket === "undefined")) {
-      console.log("connect!", App.socket);
-      Room.connect(App.room);
+      }
+      else if (roomName && userName) {
+        console.log("restored room");
+        App.room = new Room(roomName, userName);
+      }
     };
     sessionStorage.clear();
 

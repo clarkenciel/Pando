@@ -12,7 +12,7 @@
 
 (defn get-user [{users :users} username]
   (when-let [coord (get users username)]
-    {:userName username :coord (get users username)}))
+    {:userName username :coord (get-in users [username :coord])}))
 
 (defn user-exists? [{users :users} username]
   (contains? users username))

@@ -4,9 +4,7 @@
    [compojure.core :as compojure
     :refer [DELETE PUT GET POST context]]
    [compojure.route :as route]
-   [clj-time.core :as t]
    [ring.middleware.params :as params]
-   [ring.middleware.session :as session]
    [ring.middleware.resource :as resource]
    [ring.middleware.file-info :as file-info]
    [ring.middleware.content-type :as content]
@@ -17,7 +15,8 @@
    [manifold.bus :as bus] 
    [cheshire.core :as chesh]
    [pando.rooms :as rooms]
-   [pando.site :as site]))
+   [pando.site :as site]
+   [pando.templates :as t]))
 
 ;;; SITE
 (def site (atom (site/make-site "Pando" (* 4 49.00) [2 5]))) ; tune to G1
@@ -64,7 +63,7 @@
 
 ;;; SITE-LEVEL ROOM AND USER MANIPULATION
 
-(defn remove-user! [room-name user-name]  
+(defn remove-user! [room-name user-name]
   (swap! site
          (fn [s]
            (let [new-s (site/modify-room s room-name #(rooms/remove-user % user-name))]
@@ -86,24 +85,34 @@
                 % room-name
                 (partial rooms/shift-room freq))))
 
+;; I feel like this could be broken out more
 (defn pack-room-shift! [user-name room-name message]  
   (try
-    (let [m (chesh/decode message)
-          r (site/get-room
-             (shift-room! room-name (get m "frequency"))
-             room-name)] 
-      (chesh/generate-string (assoc m "newRoot" (:root r))))
+    (let [decoded-message (chesh/decode message)
+          room (site/get-room
+                (shift-room!
+                 room-name
+                 (get decoded-message "frequency"))
+                room-name)] 
+      (chesh/generate-string
+       (assoc decoded-message "newRoot" (:root room))))
     (catch Exception e
       (do (println e)
           message))))
 
-(defn connect! [room-name user-name]
+(defn connect! [room-name user-name]  
   (fn [conn]
     ;; handler for disconnects
     (s/on-closed conn #(remove-user! room-name user-name))
     
     ;; chatrooms bus -> websocket
     (s/connect (bus/subscribe chatrooms room-name) conn)
+
+    ;; update everyone to new member
+    (bus/publish! chatrooms room-name
+                  (chesh/generate-string
+                   {:userName room-name
+                    :message (str user-name " has joined!")}))
     
     ;; websocket -> chatrooms bus (kind of doseq for streams)
     (s/consume
@@ -126,23 +135,23 @@
     (let [room (site/get-room @site room-name)]
       (f room))))
 
-(defn with-websocket-check [exp req]  
+(defn with-websocket-check [exp req]
   (d/let-flow [conn (d/catch (http/websocket-connection req) (fn [_] nil))]
-      (if-not conn
-        #'json-non-websocket-response)
+    (if-not conn      
+      #'json-non-websocket-response)
       #(exp conn)))
 
-(defn with-room-check [exp room-name]  
+(defn with-room-check [exp room-name]
   (do (when (not (site/room-exists? @site room-name))
         (add-room! room-name))
       exp))
 
-(defn with-user-check [exp room-name user-name]  
+(defn with-user-check [exp room-name user-name]
   (do (when (not (rooms/user-exists? (site/get-room @site room-name) user-name))
         (add-user! room-name user-name))
     exp))
 
-(defn run-checks [exp]
+(defn run-checks [exp]  
   (apply @exp []))
 
 ;;; HANDLERS
@@ -150,6 +159,7 @@
 ;; Workflow: Client attempts to connect with a given name, if that name
 ;; is available they go through, if it is not, they are rejected
 (defn connect-handler [req room-name user-name]
+  
   (cond
     (not (and room-name user-name))
     (json-bad-request
@@ -186,7 +196,7 @@
 ;; retemplate this page so that we can embed token data to make
 ;; repeated log in faster
 (defn home-handler [{:keys [params session] :as req}]
-  (html-success-response (slurp (clojure.java.io/resource "app/index.html"))))
+  (html-success-response (t/index)))
 
 (defn list-rooms-handler [req]
   (let [rooms (site/list-rooms-info @site)]
@@ -208,13 +218,13 @@
       (let [user (rooms/get-user room user-name)]
         (json-success-response
          {:fundamental (:root room)
-          :coord       (:coord (:coord user))
+          :coord       (:coord user)
           :dimensions  (:dimensions room)})))))
 
 ;;; ROUTES
 
 (def room-routes
-  (context "/api/rooms" []
+  (context "/pando/api/rooms" []
            (GET "/list" req (list-rooms-handler req))
            (GET "/info/users/:room-name" [room-name]
                 (list-users-handler room-name))
@@ -224,23 +234,23 @@
 (def routes
   (compojure/routes   
    room-routes
-   (GET "/api/connect/:room-name/:user-name" [room-name user-name :as req]
+   (GET "/pando/api/connect/:room-name/:user-name" [room-name user-name :as req]
         (connect-handler req room-name user-name))   
-   (DELETE "/api/quit" req (remove-user-handler req))
+   (DELETE "/pando/api/quit" req (remove-user-handler req))
    (GET "*" [] home-handler)))
 
 (def app-routes
   (-> routes
-      (resource/wrap-resource "app")
+      (resource/wrap-resource "/")
       (content/wrap-content-type)
       (params/wrap-params)
-      (json/wrap-json-body)
-      (session/wrap-session {:cookie-name "Pando"})))
+      (json/wrap-json-body)))
 
 (defn start [port]
   (http/start-server #'app-routes {:port port}))
 
 (defn -main [& args]
+  (println "listening on port 10002")
   (start 10002))
 
 (comment

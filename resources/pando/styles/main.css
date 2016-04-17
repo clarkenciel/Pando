@@ -1,26 +1,10 @@
 /* GENERAL */
-html, body, .container {
+html, body, div, a, p, h1, h2, h3,h4, h5,
+input, textarea, form, lable, br, img, footer {
+    z-index:0;
+    margin:0;
+    padding:0;
     height:100%;
-}
-
-.title_text {
-    font-size: 42px;
-}
-
-.big_text {
-    font-size: 24px;
-}
-
-.medium_text {
-    font-size: 20px;
-}
-
-.small_text {
-    font-size: 18px;
-}
-
-.tiny_text {
-    font-size:12px;
 }
 
 body, footer {
@@ -57,6 +41,10 @@ a {
     color: #448800;
 }
 
+textarea {
+    resize: none;
+}
+
 input[type=text], textarea {
     background-color: #555555;
     color: #CCCCCC;
@@ -71,6 +59,7 @@ input[type=text], textarea {
 }
 
 #appTitle {
+    height:auto;
     text-align: center;
     margin: 1%;
     margin-top: 10%;
@@ -82,6 +71,7 @@ input[type=text], textarea {
 }
 
 .button {
+    height:auto;
     background-color: #448800;
     margin: 2%;
     padding: 1%;
@@ -154,6 +144,7 @@ input[type=text], textarea {
     padding:0;
     width:100%;
     margin-bottom: 1%;
+    height:auto;
     /* box-shadow: 5px 5px 5px black; */
 }
 
@@ -189,6 +180,7 @@ input[type=text], textarea {
 
 /* FORMS */
 #roomFormHolder {
+    height:auto;
     margin: 5%;
     padding: 2%;
     overflow:hidden;
@@ -197,22 +189,61 @@ input[type=text], textarea {
 
 #roomForm { }
 
-textarea {
-    resize: none;
-}
-
-label {
-    font-weight: bold;
-}
-
 .roomRadio { }
 
 /* ERRORS */
 
-#notifications { }
+#notifications {
+    height:auto;
+    padding:1%;
+}
 
 .error {
-    background-color: red;
+    text-align:center;
+    height:auto;
+    padding:1%;
+    background-color: #CC6B6B;
+    color: black;
+}
+
+/* OVERLAY */
+.overlay_backdrop {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    z
+}
+
+.overlay_container {
+
+}
+
+
+/* TEXT */
+.title_text {
+    font-size: 42px;
+}
+
+.big_text {
+    font-size: 24px;
+}
+
+.medium_text {
+    font-size: 20px;
+}
+
+.small_text {
+    font-size: 18px;
+}
+
+.tiny_text {
+    font-size:12px;
+}
+
+.bold {
+    font-weight:bold;
 }
 
 /* MOBILE */
@@ -220,15 +251,23 @@ label {
     .message {
         padding:1%;
         margin-left:1%;
-        width:110%;
+        width:95%;
     }
 
-    .message.body p {
-        padding:1%;
+    .message.body {
+        width:auto;
+        display:block;
     }
     
-    .message.username {        
+    .message.body p {
+        padding:1%;
+        width:100%
+    }
+    
+    .message.username {
+        display:inline-block;
         width: auto;
+        padding:1%;
         text-align:left;
     }
     

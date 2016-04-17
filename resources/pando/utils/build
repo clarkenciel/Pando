@@ -1,0 +1,12 @@
+#!/bin/bash
+
+echo "Leaving $(pushd .)"
+cd ~/dev/clojure/web/pando/resources/pando/scripts/
+echo ""
+echo "In $(pwd): Building js files"
+browserify source.js -d | minify --js > main.min.js
+cd ~/dev/clojure/web/pando/resources/pando/styles/
+echo "In $(pwd): Building css files"
+minify main.css > main.min.css
+echo ""
+echo "returned to $(popd)"

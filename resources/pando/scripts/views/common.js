@@ -1,8 +1,14 @@
 var m = require('../mithril/mithril');
+var Touch = require('../mithril-touch/mithril-touch');
 var exports = module.exports = {};
 
+var hide = function (e) { this.classList.add("hidden"); };
+
 exports.displayError = function (error) {
-  return m("div.error", error);
+  return m("div.error.medium_text",
+           { onclick: hide,
+             config: Touch.touchHelper({ tap: hide }) },
+           " - " + error);
 };
 
 exports.displayErrors = function (model) {
@@ -16,13 +22,14 @@ exports.displayErrors = function (model) {
 
 exports.label = function (labelText, dataName) {
   return [m("br"),
-          m("label.big_text", { for: dataName }, labelText),
+          m("label.big_text.bold", { for: dataName }, labelText),
           m("br")];
 };
 
 exports.button = function (buttonText, buttonCss, onClick) {
-  return [m("div.button" + buttonCss,
-            { onclick: onClick },
+  return [m("div.button.big_text" + buttonCss,
+            { onclick: onClick,
+              config: Touch.touchHelper({ tap: onClick }) },
             buttonText),
          m("br")];
 };
@@ -45,4 +52,10 @@ exports.modelNameRadio = function (model) {
                   value: room.roomName }),
               "Room: " + room.roomName + ", user count: " + room.userCount)];
   };
+};
+
+exports.overlay = function (contents) {
+  return m("div.overlay_backdrop",
+           m("div.overlay_container",
+             contents()));
 };

@@ -31,7 +31,7 @@ exports.participantView = function (ctl, formCallback) {
 };
 
 exports.observerView = function (ctl) {
-  return m("div.container",m("div#messages", ctl.messages().map(exports.renderMessage)));
+  return m("div.container",m("div#messages", ctl.messages().map(exports.renderMessage(ctl.user()))));
 };
 
 exports.formView = function (room, roomList, connectCallback) {

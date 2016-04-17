@@ -6,10 +6,10 @@
    [:head
     [:title "Pando"]
     [:meta {:name "viewport" :content "initial-scale=1.0, maximum-scale=1.0"}]
-    (include-css "/pando/styles/main.css")
-    (include-js "//cdnjs.cloudflare.com/ajax/libs/mithril/0.2.3/mithril.min.js")]
+    (include-css "/pando/styles/main.min.css")
+    ]
    [:body
-    [:div {:id "app"} (include-js "/pando/scripts/main.js")]]
+    [:div {:id "app"} (include-js "/pando/scripts/main.min.js")]]
    [:footer.tiny_text
     [:div
      [:p "&#169; Danny Clarke, 2016 "]]

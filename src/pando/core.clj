@@ -86,7 +86,8 @@
                 (partial rooms/shift-room freq))))
 
 ;; I feel like this could be broken out more
-(defn pack-room-shift! [user-name room-name message]  
+(defn pack-room-shift! [user-name room-name message]
+  (println message)
   (try
     (let [decoded-message (chesh/decode message)
           room (site/get-room
@@ -103,7 +104,11 @@
 (defn connect! [room-name user-name]  
   (fn [conn]
     ;; handler for disconnects
-    (s/on-closed conn #(remove-user! room-name user-name))
+    (s/on-closed
+     conn
+     #(do (bus/publish! chatrooms room-name
+                        (str user-name " has left... :("))
+          (remove-user! room-name user-name)))
     
     ;; chatrooms bus -> websocket
     (s/connect (bus/subscribe chatrooms room-name) conn)
@@ -174,7 +179,7 @@
     (json-bad-request
      {:message "You can only observe a room with at least one member."})
 
-    (is-observer? user-name)
+    (is-observer? user-name) 
     (run-checks
      (-> #(s/connect (bus/subscribe chatrooms room-name) %)
          (with-websocket-check req)))

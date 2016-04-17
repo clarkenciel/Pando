@@ -41,17 +41,12 @@ Room.connect = function (room) {
     m.redraw();
     var messages = document.getElementById("messages");
     messages.scrollTop = messages.scrollHeight;
-    if (dat.userName != App.room.user())
+    if (dat.userName != App.room.user() && App.sound !== null)
       App.sound.updateFreq(dat.newRoot);
   };
   App.socket.onopen = function (x) {
     console.log(x);
     m.route("/pando/rooms/"+App.room.name());
-    Room.makeSound(App).
-      then(function () {
-        App.sound.start();
-        console.log("starting", App.sound);
-      });
   };
   App.socket.onerror = function (e) {
     App.socket = null;
@@ -75,14 +70,16 @@ Room.quit = function (room) {
 
 Room.sendMessage = function (app) {
   return function () {
-    var out = {
-      "message": app.room.currentMessage,
-      "userName": app.room.user,
-      "roomName": app.room.name,
-      "frequency": 0
-    };    
-    app.socket.send(JSON.stringify(out));
-    app.room.currentMessage("");
+    if (app.room.currentMessage().length > 0) {
+      var out = {
+        "message": app.room.currentMessage,
+        "userName": app.room.user,
+        "roomName": app.room.name,
+        "frequency": 0
+      };    
+      app.socket.send(JSON.stringify(out));
+      app.room.currentMessage("");
+    };
   };
 };
 
@@ -97,9 +94,9 @@ Room.makeSound = function (app) {
 };
 
 Room.conversation = {
-  controller: function (roomName) {
-
-    console.log("roomName:", roomName);
+  controller: function () {
+    var roomName = m.route.param("roomName");
+    console.log(App.room);
 
     // store data if the page refreshes and allow reconnect
     window.onbeforeunload = function (e) {
@@ -136,13 +133,20 @@ Room.conversation = {
       Room.connect(App.room);
     };
     sessionStorage.clear();
+
+    // sound initialization
+    Room.makeSound(App).
+      then(function () {
+        App.sound.start();
+        console.log("starting", App.sound);
+      });
   },
   
   view: function (ctl) {
     if (App.room.user() == "observer")
-        return Views.room.observerView(App.room);  
+      return Views.room.observerView(App.room);
     else
-      return Views.room.participantView(App.room, Room.sendMessage(App));    
+      return Views.room.participantView(App.room, Room.sendMessage(App));
   }
 };
 

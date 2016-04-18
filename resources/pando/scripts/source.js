@@ -45,14 +45,16 @@ Room.connect = function (room) {
       App.sound.updateFreq(dat.newRoot);
   };
   App.socket.onopen = function (x) {
-    console.log(x);
-    if (!m.route.param("roomName")) m.route("/pando/"+App.room.name());
+    console.log(x);    
     // sound initialization
     Room.makeSound(App).
       then(function () {
         App.sound.start();
-        console.log("starting", App.sound);
-      });
+        console.log("starting", App.sound);}).
+      catch(function (e) {
+        console.log("sound error", e); });
+    console.log("sound:", App.sound);
+    if (!m.route.param("roomName")) m.route("/pando/"+App.room.name());
   };
   App.socket.onerror = function (e) {
     App.socket = null;
@@ -93,10 +95,12 @@ Room.sendMessage = function (app) {
 };
 
 Room.makeSound = function (app) {
+  console.log("make sound1");
   return m.request({ method: "GET",
                      url: "/pando/api/rooms/info/"+app.room.name()+"/"+app.room.user() }).
     then(function (resp) {
-      app.sound = new Sound(resp.fundamental, resp.dimensions, resp.coord);
+      app.sound = new Sound.Sound(resp.fundamental, resp.dimensions, resp.coord);
+      console.log("make sound 2", app.sound);
     }).catch(function (e) {
       console.log("make sound error", e);
     });

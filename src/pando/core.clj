@@ -135,11 +135,11 @@
          params)))
 
 (defn with-room [room-name f]
-  (if-not (site/room-exists? @site room-name)
+  (println "room check" room-name @site)
+  (if-let [room (get-in @site [:rooms room-name])]    
+    (f room)      
     (json-bad-request
-     {:message (str room-name " does not exist!")})
-    (let [room (site/get-room @site room-name)]
-      (f room))))
+     {:message (str room-name " does not exist!")})))
 
 (defn with-websocket-check [exp req]
   (d/let-flow [conn (d/catch (http/websocket-connection req) (fn [_] nil))]

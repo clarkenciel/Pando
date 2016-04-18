@@ -1,8 +1,10 @@
+var Utils = require('./utils');
 var exports = module.exports = {};
 
-exports.audioCtx = new AudioContext();
+exports.audioCtx = null;
 
 exports.Sound = function (fundamental, dimensions, coord) {
+  exports.audioCtx = exports.audioCtx ? exports.audioCtx : new AudioContext();
   this._coord = coord;
   this._dimensions = dimensions;
   this.gain = exports.audioCtx.createGain();
@@ -17,6 +19,5 @@ exports.Sound = function (fundamental, dimensions, coord) {
   this.gain.gain.value = 0.3;
   this.updateFreq(fundamental);
   this.gain.connect(exports.audioCtx.destination);
-  this.osc.connect(out.gain);
-  return out;
+  this.osc.connect(this.gain);
 };

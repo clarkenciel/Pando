@@ -243,11 +243,12 @@
    (GET "/pando/api/connect/:room-name/:user-name" [room-name user-name :as req]
         (connect-handler req room-name user-name))   
    (DELETE "/pando/api/quit" req (remove-user-handler req))
-   (GET "*" [] home-handler)))
+   (route/files "/pando" {:root "resources/pando"})
+   (GET "*" [] home-handler)
+   (route/not-found "Not found")))
 
 (def app-routes
   (-> routes
-      (resource/wrap-resource "/")
       (content/wrap-content-type)
       (params/wrap-params)
       (json/wrap-json-body)))

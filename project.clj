@@ -3,7 +3,6 @@
   :license {:name "Eclipse Public License"
             :url "http://www.eclipse.org/legal/epl-v10.html"}
   ;; avoid compatibility issues with java 7
-  :jvm-opts ["-Dmanifold.disable-jvm8-primitives=true"]
   :dependencies [[org.clojure/clojure "1.7.0"]
                  [aleph "0.4.0"]     ; client-server networking
                  [manifold "0.1.2"]  ; managing asynchronous values
@@ -20,5 +19,5 @@
              :aot :all
              :uberjar-name "pando-site.jar"
              :source-paths ["src"]
-             :resource-paths ["resources"]
+             :resource-paths ["resources/pando"]
              }})

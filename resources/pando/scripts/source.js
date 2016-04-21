@@ -1,5 +1,18 @@
 var m = require('./mithril/mithril');
 var Sound = require('./audio/sound.js');
+var Views = require('./views/views.js');
+var T = require('./tools.js');
+
+var IMOBILE = T.any([/iPad/i, /iPod/i, /iPhone/i],
+                    function (p) { return navigator.userAgent.match(p) != null; });
+
+var App =  {
+  socket: null,
+  room: null,
+  reconnect: false,
+  sound: null
+};
+
 var Room = function (roomName, userName) {
   this.name = m.prop(roomName || "");
   this.user = m.prop(userName || "");
@@ -7,14 +20,6 @@ var Room = function (roomName, userName) {
   this.errors = m.prop([]);
   this.messages = m.prop([]);
   this.currentMessage = m.prop("");
-};
-var Views = require('./views/views.js');
-
-var App =  {
-  socket: null,
-  room: null,
-  reconnect: false,
-  sound: null
 };
 
 var RoomList = function () {
@@ -27,16 +32,6 @@ var RoomList = function () {
       };
     });
 };
-
-var when = function (val, callback) {
-  if (val !== null && typeof val !== "undefined") return callback();
-  else return null;
-};
-
-var any = function (vals, test) { return vals.map(test).indexOf(true) > -1; };
-
-var IMOBILE = any([/iPad/i, /iPod/i, /iPhone/i],
-                  function (p) { return navigator.userAgent.match(p) != null; });
 
 Room.connect = function (room) {
   var socketAddr;
@@ -69,7 +64,7 @@ Room.connect = function (room) {
       m.redraw();
       messages = document.getElementById("messages");
       messages.scrollTop = messages.scrollHeight;
-      when(dat.newRoot, function () {        
+      T.when(dat.newRoot, function () {        
         if (dat.userName != App.room.user() && App.sound !== null)
           App.sound.updateFreq(dat.newRoot); });
     };

@@ -1,6 +1,6 @@
 #!/bin/bash
 
-echo "Leaving $(pushd .)"
+echo "Leaving $(pwd)"
 cd scripts/
 echo ""
 echo "In $(pwd): Building js files"
@@ -10,4 +10,4 @@ browserify source.js -d -o main.js
 #echo "In $(pwd): Building css files"
 #minify main.css > main.min.css
 echo ""
-echo "returned to $(popd)"
+echo "returned to $(pwd)"

@@ -87,14 +87,11 @@
 
 ;; I feel like this could be broken out more
 (defn pack-room-shift! [user-name room-name message]
-  (println message)
   (try
     (let [decoded-message (chesh/decode message)
-          room (site/get-room
-                (shift-room!
-                 room-name
-                 (get decoded-message "frequency"))
-                room-name)] 
+          room (-> room-name
+                   (shift-room! (get decoded-message "frequency"))
+                   (site/get-room room-name))] 
       (chesh/generate-string
        (assoc decoded-message "newRoot" (:root room))))
     (catch Exception e
@@ -102,7 +99,6 @@
           message))))
 
 (defn connect! [room-name user-name]
-  (println "connect!" room-name user-name)
   (fn [conn]
     ;; handler for disconnects
     (s/on-closed
@@ -135,7 +131,6 @@
          params)))
 
 (defn with-room [room-name f]
-  (println "room check" room-name @site)
   (if-let [room (get-in @site [:rooms room-name])]    
     (f room)      
     (json-bad-request
@@ -164,8 +159,7 @@
 
 ;; Workflow: Client attempts to connect with a given name, if that name
 ;; is available they go through, if it is not, they are rejected
-(defn connect-handler [req room-name user-name]
-  (println "connect-handler" room-name user-name)
+(defn connect-handler [req room-name user-name]  
   (cond
     (not (and room-name user-name))
     (json-bad-request
@@ -238,7 +232,7 @@
                 (get-user-info-handler room-name user-name))))
 
 (def routes
-  (compojure/routes   
+  (compojure/routes
    room-routes
    (GET "/pando/api/connect/:room-name/:user-name" [room-name user-name :as req]
         (connect-handler req room-name user-name))   

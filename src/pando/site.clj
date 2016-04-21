@@ -16,7 +16,6 @@
   (get-in site [:rooms roomname]))
 
 (defn list-rooms-info [site]
-  (println site)
   (map (fn [[_ r]]
          {:roomName (:room-name r)
           :userCount (rooms/user-count r)})

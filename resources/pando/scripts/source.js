@@ -28,45 +28,65 @@ var RoomList = function () {
     });
 };
 
+var when = function (val, callback) {
+  if (val !== null && typeof val !== "undefined") return callback();
+  else return null;
+};
+
+var any = function (vals, test) { return vals.map(test).indexOf(true) > -1; };
+
+var IMOBILE = any([/iPad/i, /iPod/i, /iPhone/i],
+                  function (p) { return navigator.userAgent.match(p) != null; });
+
 Room.connect = function (room) {
   var socketAddr;
   socketAddr = 'ws://' + window.location.host + '/pando/api/connect/' + room.name() + '/' + room.user();
   console.log("socket address:", socketAddr);
   
   App.socket = new WebSocket(socketAddr);
-  console.log(App.socket);
-  App.socket.onmessage = function (message) {
-    var dat = JSON.parse(message.data);
-    App.room.messages().push(dat);
-    m.redraw();
-    var messages = document.getElementById("messages");
-    messages.scrollTop = messages.scrollHeight;
-    if (dat.userName != App.room.user() && App.sound !== null)
-      App.sound.updateFreq(dat.newRoot);
-  };
+  console.log(App.socket);  
+  
   App.socket.onopen = function (x) {
-    console.log(x);    
+    console.log("socket opened");
     // sound initialization
     Room.makeSound(App).
       then(function () {
-        App.sound.start();
-        console.log("starting", App.sound);}).
+        // i-mobile devices require that web audio components be started by
+        // a user action so we shouldn't start it here - go to Room.sendMessage
+        if (!IMOBILE) {
+          App.sound.start();
+          console.log("starting", App.sound);}}).
       catch(function (e) {
         console.log("sound error", e); });
-    console.log("sound:", App.sound);
+
+    // move us to the room if we logged in via the landing page
     if (!m.route.param("roomName")) m.route("/pando/"+App.room.name());
-  };
-  App.socket.onerror = function (e) {
-    App.socket = null;
-    console.log(e);
-    App.room.errors().push("Something went wrong when making a connection");
-    App.socket.close();
-    m.route("/pando");
-  };
-  App.socket.onclose = function (e) {
-    App.socket = null;
-    if (App.sound != null)
-      App.sound.stop();
+
+    App.socket.onmessage = function (message) {
+      var messages, dat = JSON.parse(message.data);
+      
+      App.room.messages().push(dat);
+      m.redraw();
+      messages = document.getElementById("messages");
+      messages.scrollTop = messages.scrollHeight;
+      when(dat.newRoot, function () {        
+        if (dat.userName != App.room.user() && App.sound !== null)
+          App.sound.updateFreq(dat.newRoot); });
+    };
+    
+    App.socket.onerror = function (e) {
+      App.socket = null;
+      console.log(e);
+      App.room.errors().push("Something went wrong when making a connection");
+      App.socket.close();
+      m.route("/pando");
+    };
+    
+    App.socket.onclose = function (e) {
+      App.socket = null;
+      if (App.sound !== null)
+        App.sound.stop();
+    };
   };
 };
 
@@ -91,16 +111,16 @@ Room.sendMessage = function (app) {
       app.socket.send(JSON.stringify(out));
       app.room.currentMessage("");
     };
+    // i-mobile devices require that we start on user actions
+    if (IMOBILE) App.sound.start();
   };
 };
 
-Room.makeSound = function (app) {
-  console.log("make sound1");
+Room.makeSound = function (app) {  
   return m.request({ method: "GET",
                      url: "/pando/api/rooms/info/"+app.room.name()+"/"+app.room.user() }).
     then(function (resp) {
       app.sound = new Sound.Sound(resp.fundamental, resp.dimensions, resp.coord);
-      console.log("make sound 2", app.sound);
     }).catch(function (e) {
       console.log("make sound error", e);
     });
@@ -137,6 +157,7 @@ Room.conversation = {
         sessionStorage.setItem('user-name', App.room.user());
         console.log("refresh detected, stored:", sessionStorage.getItem('room'));
       };
+      App.socket.close();
     };
 
     // handle back button navigation as a log out

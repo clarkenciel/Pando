@@ -20,5 +20,4 @@ who cannot interact with the room, but gains access to all of the drones at once
 
 Copyright © 2016 Danny Clarke
 
-Distributed under the Eclipse Public License either version 1.0 or (at
-your option) any later version.
+Distributed under the MIT License.

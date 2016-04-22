@@ -5,7 +5,7 @@ var exports = module.exports = {};
 exports.renderMessage = function (thisUser) {
   return function (message) {
     var userDiv, messageUser = message.userName;
-    console.log(thisUser, messageUser);
+
     if (thisUser == messageUser)
       userDiv = m("div.message.username.medium_text.this_user", messageUser + ":");
     else
@@ -13,7 +13,7 @@ exports.renderMessage = function (thisUser) {
     return m("div.message",
              [userDiv,
               m("div.message.body.small_text",
-                m("p",message.message))]);
+                message.message.split("\n").map(function (l) { return m("p", l); }))]);
   };
 };
 
@@ -31,11 +31,11 @@ exports.participantView = function (ctl, formCallback) {
 };
 
 exports.observerView = function (ctl) {
-  return m("div.container",m("div#messages", ctl.messages().map(exports.renderMessage(ctl.user()))));
+  return m("div#messages", ctl.messages().map(exports.renderMessage(ctl.user())));
 };
 
 exports.formView = function (room, roomList, connectCallback) {
-  return m("div#roomFormHolder",
+  return m("div#roomFormHolder.interactionHolder",
            m("form#roomForm",
              [common.textInput("User Name:", "userName", room.user),
               m("br"),
@@ -46,4 +46,25 @@ exports.formView = function (room, roomList, connectCallback) {
               roomList.data().list.map(common.modelNameRadio(room)),
               m("br"),
               common.button("Connect", "#connect", function () {connectCallback(room, roomList);})]));
+};
+
+exports.audioPrompt = function (app, enableCallback, cancelCallback) {
+  return m("div.popup.interactionHolder",
+           [m("p.medium_text", "You need to enable web audio to continue"),
+            m("div.buttonRow",
+              [m("button.button",
+                 { onclick: function () { return enableCallback(); } },
+                 "Enable"),
+               m("button.button",
+                 { onclick: function () { return cancelCallback(); } },
+                 "Cancel & Leave")])]);
+};
+                
+exports.onTheFlyJoin = function (app, clickCallback) {
+  return m("div#roomFormHolder.interactionHolder",
+           [common.textInput("User name:", "userName", app.room.user),
+            m("br"),
+            common.button("Join", "#connect", function () {
+              m.redraw.strategy("none");
+              clickCallback(); })]);
 };

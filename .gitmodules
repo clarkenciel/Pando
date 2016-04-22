@@ -1,0 +1,6 @@
+[submodule "resources/pando/scripts/i_dropped_my_phone_the_screen_cracked"]
+	path = resources/pando/scripts/i_dropped_my_phone_the_screen_cracked
+	url = http://github.com/billorcutt/i_dropped_my_phone_the_screen_cracked
+[submodule "resources/pando/scripts/cracked"]
+	path = resources/pando/scripts/cracked
+	url = http://github.com/billorcutt/i_dropped_my_phone_the_screen_cracked

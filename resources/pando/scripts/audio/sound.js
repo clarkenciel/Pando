@@ -1,15 +1,12 @@
 var Utils = require('./utils');
 var exports = module.exports = {};
 
-var getContext = function () {
+exports.getContext = function () {
   if ('AudioContext' in window) return new AudioContext();
   else return new webkitAudioContext();
 };
 
-var audioCtx = null;
-
-exports.Sound = function (fundamental, dimensions, coord) {
-  audioCtx = audioCtx ? audioCtx : getContext();
+exports.Sound = function (audioCtx, fundamental, dimensions, coord) {  
   this._coord = coord;
   this._dimensions = dimensions;
   this.gain = audioCtx.createGain();

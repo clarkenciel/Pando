@@ -101,25 +101,24 @@
 (defn connect! [room-name user-name]
   (fn [conn]
     ;; handler for disconnects
-    (s/on-closed
-     conn
-     #(do (bus/publish! chatrooms room-name
-                        (str user-name " has left... :("))
-          (remove-user! room-name user-name)))
+    (s/on-closed conn
+                 #(do (bus/publish! chatrooms room-name
+                                    (str user-name " has left... :("))
+                      (remove-user! room-name user-name)))
     
     ;; chatrooms bus -> websocket
     (s/connect (bus/subscribe chatrooms room-name) conn)
 
+    ;; websocket -> chatrooms bus (kind of doseq for streams)
+    (s/consume
+     #(bus/publish! chatrooms room-name (pack-room-shift! user-name room-name %))
+     (s/throttle 10 conn))
+    
     ;; update everyone to new member
     (bus/publish! chatrooms room-name
                   (chesh/generate-string
                    {:userName room-name
-                    :message (str user-name " has joined!")}))
-    
-    ;; websocket -> chatrooms bus (kind of doseq for streams)
-    (s/consume
-     #(bus/publish! chatrooms room-name (pack-room-shift! user-name room-name %))
-     (s/throttle 10 conn))))
+                    :message (str user-name " has joined!")}))))
 
 ;; HELPERS
 
@@ -159,7 +158,8 @@
 
 ;; Workflow: Client attempts to connect with a given name, if that name
 ;; is available they go through, if it is not, they are rejected
-(defn connect-handler [req room-name user-name]  
+(defn connect-handler [req room-name user-name]
+  (println room-name user-name @site)
   (cond
     (not (and room-name user-name))
     (json-bad-request

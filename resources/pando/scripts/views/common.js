@@ -5,18 +5,14 @@ var exports = module.exports = {};
 var hide = function (e) { this.classList.add("hidden"); };
 
 exports.displayError = function (error) {
-  return m("div.error.medium_text",
+  return m("div.error.popup.medium_text.bold_text",
            { onclick: hide,
              config: Touch.touchHelper({ tap: hide }) },
            " - " + error);
 };
 
 exports.displayErrors = function (model) {
-  return m("div#notifications",
-           { style: (function () {
-             if (model.errors().length > 0) return "display: block";
-             else return "display: none"; })()
-           },
+  return m("div#notifications.popup.container",           
            model.errors().splice(0,model.errors().length).map(exports.displayError));
 };
 

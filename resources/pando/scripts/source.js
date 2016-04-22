@@ -1,5 +1,6 @@
+/* REQUIRES THAT CRACKED BE INCLUDED IN HEAD OF HTML */
+
 var m = require('./mithril/mithril');
-var Sound = require('./audio/sound.js');
 var Views = require('./views/views.js');
 var T = require('./tools.js');
 
@@ -10,14 +11,15 @@ var App =  {
   socket: null,
   room: null,
   reconnect: false,
-  sound: null
+  //context: null,
+  hasSound: false,
+  errors: m.prop([])
 };
 
 var Room = function (roomName, userName) {
   this.name = m.prop(roomName || "");
   this.user = m.prop(userName || "");
   this.socket = m.prop(null);
-  this.errors = m.prop([]);
   this.messages = m.prop([]);
   this.currentMessage = m.prop("");
 };
@@ -25,7 +27,7 @@ var Room = function (roomName, userName) {
 var RoomList = function () {
   var self = this;
   this.data = m.request({ method: "GET", url: "/pando/api/rooms/list" }).
-    then(function (data) {      
+    then(function (data) {
       return {
         count: data.roomCount,
         list: data.rooms
@@ -38,24 +40,11 @@ Room.connect = function (room) {
   socketAddr = 'ws://' + window.location.host + '/pando/api/connect/' + room.name() + '/' + room.user();
   console.log("socket address:", socketAddr);
   
-  App.socket = new WebSocket(socketAddr);
+  App.socket = App.socket === null ? new WebSocket(socketAddr) : App.socket;
   console.log(App.socket);  
   
   App.socket.onopen = function (x) {
     console.log("socket opened");
-    // sound initialization
-    Room.makeSound(App).
-      then(function () {
-        // i-mobile devices require that web audio components be started by
-        // a user action so we shouldn't start it here - go to Room.sendMessage
-        if (!IMOBILE) {
-          App.sound.start();
-          console.log("starting", App.sound);}}).
-      catch(function (e) {
-        console.log("sound error", e); });
-
-    // move us to the room if we logged in via the landing page
-    if (!m.route.param("roomName")) m.route("/pando/"+App.room.name());
 
     App.socket.onmessage = function (message) {
       var messages, dat = JSON.parse(message.data);
@@ -64,24 +53,26 @@ Room.connect = function (room) {
       m.redraw();
       messages = document.getElementById("messages");
       messages.scrollTop = messages.scrollHeight;
-      T.when(dat.newRoot, function () {        
-        if (dat.userName != App.room.user() && App.sound !== null)
-          App.sound.updateFreq(dat.newRoot); });
+      // T.when(dat.newRoot, function () {
+      //   if (dat.userName != App.room.user() && App.sound !== null)
+      //     App.sound.updateFreq(dat.newRoot); });
     };
     
     App.socket.onerror = function (e) {
       App.socket = null;
       console.log(e);
-      App.room.errors().push("Something went wrong when making a connection");
+      App.errors().push("Something went wrong when making a connection");
       App.socket.close();
       m.route("/pando");
     };
     
     App.socket.onclose = function (e) {
       App.socket = null;
-      if (App.sound !== null)
-        App.sound.stop();
+      cracked("sine").stop();
     };
+
+    // move us to the room if we logged in via the landing page
+    if (!m.route.param("roomName")) m.route("/pando/"+App.room.name());
   };
 };
 
@@ -107,22 +98,26 @@ Room.sendMessage = function (app) {
       app.room.currentMessage("");
     };
     // i-mobile devices require that we start on user actions
-    if (IMOBILE) App.sound.start();
+    //if (IMOBILE) App.sound.start();
   };
 };
 
-Room.makeSound = function (app) {  
+Room.makeSound = function (app) {
   return m.request({ method: "GET",
                      url: "/pando/api/rooms/info/"+app.room.name()+"/"+app.room.user() }).
     then(function (resp) {
-      app.sound = new Sound.Sound(resp.fundamental, resp.dimensions, resp.coord);
+      //app.sound = new Sound.Sound(App.context, resp.fundamental, resp.dimensions, resp.coord);
     }).catch(function (e) {
+      App.errors().push(e.message);
+      m.route("/pando");
       console.log("make sound error", e);
     });
 };
 
 Room.conversation = {
   controller: function () {
+    //if (App.context === null) m.route("/pando/audio_check");    
+
     var body = document.getElementsByTagName("body")[0];
     body.classList.remove("auto_height");
     body.classList.add("full_height");
@@ -143,6 +138,8 @@ Room.conversation = {
     };
     sessionStorage.clear();
 
+    //if (App.socket === null && App.room.user()) Room.connect(App.room);
+
     // store data if the page refreshes and allow reconnect
     window.onbeforeunload = function (e) {
       var navType = window.performance.navigation.type;
@@ -150,49 +147,76 @@ Room.conversation = {
       if (navType == 1 || navType == 0) {
         sessionStorage.setItem('room-name', App.room.name());
         sessionStorage.setItem('user-name', App.room.user());
-        console.log("refresh detected, stored:", sessionStorage.getItem('room'));
+        console.log("refresh detected, stored:",
+                    sessionStorage.getItem('room'));
       };
       App.socket.close();
+      App.hasSound = false;
     };
 
     // handle back button navigation as a log out
     window.onpopstate = function (e) {
-      console.log("Back navigation detected, logging out", e);      
+      console.log("Back navigation detected, logging out", e);
       App.reconnect = false;
       App.socket.close();
+      App.hasSound = false;
       m.route("/pando");
     };
   },
-  
+
   view: function (ctl) {
     console.log(App.room.user());
-    if (App.room.user() == "observer") {
-      return Views.room.observerView(App.room);
-    }
-    else if (!App.room.user()) {
-      console.log("displaying form");
-      return m("div.container",
-               m("div#roomFormHolder",
-                 [Views.common.textInput("User name:", "userName", App.room.user),
-                  m("br"),
-                  Views.common.button("Join", "#connect", function () {
-                    m.redraw.strategy("none");
-                    Room.connect(App.room); })]));
+    var view = [];
+    if (!App.room.user()) {
+      view.push(Views.room.onTheFlyJoin(App, function () { Room.connect(App.room); }));
     }
     else {
-      return Views.room.participantView(App.room, Room.sendMessage(App));
+      if (App.room.user() == "observer") {
+        view.push(Views.room.observerView(App.room));
+      }
+      else {
+        view.push(Views.room.participantView(App.room, Room.sendMessage(App)));
+      }
+      if (!App.hasSound) {
+        view.push(m("div.container.popup",
+                    Views.room.audioPrompt(App,
+                                           function () {
+                                             cracked().sine().dac().play();
+                                             console.log(App.room.name());
+                                             App.hasSound = true;
+                                             m.route("/pando/"+App.room.name());
+                                           },
+                                           function () { m.route("/pando"); })));
+      }
     }
+    return m("div.container", view);
+  }
+};
+
+// i-mobile devices require that web audio components be started by
+// a user action
+var AudioCheck = {
+  controller: function () {},
+  view: function (ctl) {
+    return Views.room.audioPrompt(App,
+                                  function () {
+                                    //cracked().sine().dac().play();
+                                    console.log(App.room.name());
+                                    m.route("/pando/"+App.room.name());
+                                  },
+                                  function () {
+                                    m.route("/pando");
+                                  });
   }
 };
 
 var Index = {
-  controller: function () {    
+  controller: function () {
     App.room = App.room || new Room();
     App.reconnect = false;
-    if (App.sound !== null && App.sound.isStarted)
-      App.sound.stop();
-    this.rooms = typeof this.rooms === "undefined" ? new RoomList() : this.rooms;
-    console.log("Index controller ", this.rooms);
+    //if (App.sound !== null && App.sound.isStarted) App.sound.stop();
+    if (typeof this.rooms === "undefined") this.rooms = new RoomList();
+
     var body = document.getElementsByTagName("body")[0];
     body.classList.remove("full_height");
     body.classList.add("auto_height");
@@ -200,25 +224,30 @@ var Index = {
   view: function (ctl) {
     return m("div.container", [
       m("div#appTitle.title_text", "Pando"),
-      Views.common.displayErrors(App.room),
-      Views.room.formView(App.room, ctl.rooms,
-                          function (room, roomList) {
-                            console.log("connect callback");
-                            if (room.user() == "observer" &&
-                                !roomList.data().list.some(function (v) {                             
-                                  return v.roomName == room.name(); })) {
-                              room.errors().push("You can only observe a room with at least one member");
-                              m.route("/pando");
-                            }
-                            else if (room.name() == "" || room.user() == "") {
-                              room.errors().push("Please provide both a room name and a user name");
-                              m.route("/pando");
-                            }
-                            else {
-                              console.log("successful connect request");
-                              Room.connect(room);
-                            };
-                          })]);      
+      (function () {
+        if (App.errors().length > 0)
+          return Views.common.displayErrors(App);
+        else
+          return [];
+      })(),
+      Views.room.formView(
+        App.room, ctl.rooms,
+        function (room, roomList) {
+          console.log("connect callback");
+          var roomPopulated = !roomList.data().
+                list.some(function (v) { return v.roomName == room.name(); });
+          if (room.user() == "observer" && roomPopulated) {
+            App.errors().push("You can only observe a room with at least one member");
+          }
+          else if (room.name() == "" || room.user() == "") {
+            App.errors().push("Please provide both a room name and a user name");
+          }
+          else {
+            //m.route("/pando/audio_check");
+            Room.connect(App.room);
+            m.route("/pando/"+room.name());
+          };
+        })]);
   }
 };
 
@@ -228,5 +257,6 @@ m.route.mode = "pathname";
 
 m.route(target, "/pando", {
   "/pando": Index,
+  //"/pando/audio_check" : AudioCheck,
   "/pando/:roomName": Room.conversation
 });

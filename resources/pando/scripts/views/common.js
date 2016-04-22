@@ -5,14 +5,14 @@ var exports = module.exports = {};
 var hide = function (e) { this.classList.add("hidden"); };
 
 exports.displayError = function (error) {
-  return m("div.error.popup.medium_text.bold_text",
-           { onclick: hide,
-             config: Touch.touchHelper({ tap: hide }) },
+  return m("div.error.popup.medium_text.bold_text",           
            " - " + error);
 };
 
 exports.displayErrors = function (model) {
-  return m("div#notifications.popup.container",           
+  return m("div#notifications.popup.container",
+           { onclick: hide,
+             config: Touch.touchHelper({ tap: hide }) },
            model.errors().splice(0,model.errors().length).map(exports.displayError));
 };
 
@@ -23,11 +23,12 @@ exports.label = function (labelText, dataName) {
 };
 
 exports.button = function (buttonText, buttonCss, onClick) {
-  return [m("div.button.big_text" + buttonCss,
-            { onclick: onClick,
-              config: Touch.touchHelper({ tap: onClick }) },
-            buttonText),
-         m("br")];
+  return [m("div.buttonRow",
+            m("button.button.big_text" + buttonCss,
+              { onclick: onClick//, config: Touch.touchHelper({ tap: onClick })
+              },
+              buttonText)),
+          m("br")];
 };
 
 exports.textInput = function (labelName, dataName, attr) {

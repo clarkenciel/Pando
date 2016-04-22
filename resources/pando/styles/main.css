@@ -164,6 +164,11 @@ input[type=text], textarea {
     color: black;
 }
 
+.message.username.room_user {
+    background-color: #AA8800;
+    color: black;
+}
+
 /* FORMS */
 .interactionHolder {
     height:auto;
@@ -174,6 +179,7 @@ input[type=text], textarea {
 }
 
 .buttonRow {
+    text-align:center;
 }
 
 button, .button {
@@ -185,6 +191,7 @@ button, .button {
     margin: 2%;
     padding: 1%;
     text-align: center;
+    width: 50%;
 }
 
 #roomForm { }
@@ -227,28 +234,15 @@ button, .button {
     height:auto;
     margin-right:auto;
     margin-left:auto;
-    padding:1%;
+    padding-top:2%;
+    padding-bottom:2%;
+    text-align:center;
 }
 
 .error {
     background-color: #CC6B6B;
     color: black;
 }
-
-/* OVERLAY */
-.overlay_backdrop {
-    position: absolute;
-    top: 0;
-    left: 0;
-    width: 100%;
-    height: 100%;
-    z-index:10;
-}
-
-.overlay_container {
-
-}
-
 
 /* TEXT */
 .title_text {

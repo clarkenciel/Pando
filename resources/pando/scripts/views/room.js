@@ -1,13 +1,16 @@
 var m = require('../mithril/mithril');
+var Touch = require('../mithril-touch/mithril-touch');
 var common = require('./common');
 var exports = module.exports = {};
 
-exports.renderMessage = function (thisUser) {
+exports.renderMessage = function (thisUser, roomName) {
   return function (message) {
     var userDiv, messageUser = message.userName;
 
     if (thisUser == messageUser)
       userDiv = m("div.message.username.medium_text.this_user", messageUser + ":");
+    else if (roomName == messageUser)
+      userDiv = m("div.message.username.medium_text.room_user", messageUser + ":");
     else
       userDiv = m("div.message.username.medium_text", messageUser + ":");
     return m("div.message",
@@ -19,19 +22,21 @@ exports.renderMessage = function (thisUser) {
 
 exports.participantView = function (ctl, formCallback) {
   return m("div.container",[
-    m("div#messages", ctl.messages().map(exports.renderMessage(ctl.user()))),
+    m("div#messages", ctl.messages().map(exports.renderMessage(ctl.user(), ctl.name()))),
     m("div#messageForm", [
       m("form", [
         m("textarea#messageBody.medium_text",
           { oninput: m.withAttr("value", ctl.currentMessage) },
           ctl.currentMessage()),
-        common.button(m("div.imageHolder",
-                        m("img[src='/pando/img/send.svg']")),
-                      "#messageSend", formCallback)])])]);
+        m("div#messageSend.button",
+          { onlick: formCallback,
+            config: Touch.touchHelper({ tap: formCallback }) },
+          m("div.imageHolder",
+             m("img[src='/pando/img/send.svg']")))])])]);
 };
 
 exports.observerView = function (ctl) {
-  return m("div#messages", ctl.messages().map(exports.renderMessage(ctl.user())));
+  return m("div#messages", ctl.messages().map(exports.renderMessage(ctl.user(), ctl.name())));
 };
 
 exports.formView = function (room, roomList, connectCallback) {
@@ -59,12 +64,19 @@ exports.audioPrompt = function (app, enableCallback, cancelCallback) {
                  { onclick: function () { return cancelCallback(); } },
                  "Cancel & Leave")])]);
 };
-                
+
 exports.onTheFlyJoin = function (app, clickCallback) {
   return m("div#roomFormHolder.interactionHolder",
            [common.textInput("User name:", "userName", app.room.user),
             m("br"),
             common.button("Join", "#connect", function () {
-              m.redraw.strategy("none");
+              //m.redraw.strategy("none");
               clickCallback(); })]);
+};
+
+exports.errorDisplay = function (app) {
+  if (app.errors().length > 0)
+    return common.displayErrors(app);
+  else
+    return [];
 };

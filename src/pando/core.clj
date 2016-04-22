@@ -103,7 +103,9 @@
     ;; handler for disconnects
     (s/on-closed conn
                  #(do (bus/publish! chatrooms room-name
-                                    (str user-name " has left... :("))
+                                    (chesh/generate-string
+                                     {:userName room-name
+                                      :message (str user-name " has left... :(")}))
                       (remove-user! room-name user-name)))
     
     ;; chatrooms bus -> websocket
@@ -206,11 +208,11 @@
 
 (defn list-users-handler [room-name]
   (with-room room-name
-    (fn [room]
-      (let [usernames (rooms/list-usernames room)]
-        (json-success-response
-         {:userCount (count usernames)
-          :users usernames})))))
+    (fn [room]      
+      (json-success-response
+       {:users (get room :users [])
+        :root  (:root room)
+        :dimensions (:dimensions room)}))))
 
 (defn get-user-info-handler [room-name user-name]
   (with-room room-name

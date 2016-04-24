@@ -58,10 +58,14 @@ exports.audioPrompt = function (app, enableCallback, cancelCallback) {
            [m("p.medium_text", "You need to enable web audio to continue"),
             m("div.buttonRow",
               [m("button.button",
-                 { onclick: function () { return enableCallback(); } },
+                 { onclick: function () { enableCallback(); },
+                   config: Touch.touchHelper({ tap: function(){enableCallback();} })
+                 },
                  "Enable"),
                m("button.button",
-                 { onclick: function () { return cancelCallback(); } },
+                 { onclick: function () { cancelCallback(); },
+                   config: Touch.touchHelper({ tap: function () {cancelCallback();} })
+                 },
                  "Cancel & Leave")])]);
 };
 
@@ -70,7 +74,6 @@ exports.onTheFlyJoin = function (app, clickCallback) {
            [common.textInput("User name:", "userName", app.room.user),
             m("br"),
             common.button("Join", "#connect", function () {
-              //m.redraw.strategy("none");
               clickCallback(); })]);
 };
 

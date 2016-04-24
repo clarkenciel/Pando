@@ -144,14 +144,14 @@ input[type=text], textarea {
 .message.username {
     background-color: #444444;
     display:inline-block;
-    width:10%;    
+    width:auto;    
     text-align:right;
     vertical-align:top;
 }
 
 .message.body {
     background-color: #222222;
-    width:85%;
+    width:auto;
     display:inline-block;
 }
 
@@ -213,7 +213,7 @@ button, .button {
 /* ERRORS */
 
 .popup.container {
-    z-index 50;
+    z-index: 50;
     position:fixed;
     top:0;
     left:0;

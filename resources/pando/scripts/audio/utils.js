@@ -7,7 +7,6 @@ exports.constrainFrequency = function (lo, hi, frequency) {
     if (frequency < lo) frequency *= 2;
     if (frequency > hi) frequency *= 0.5;
   };
-  console.log("freq:", frequency);
   return frequency;
 };
 

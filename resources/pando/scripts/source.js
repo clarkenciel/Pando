@@ -91,17 +91,21 @@ var observerKill = function () {
   cracked("observer").stop();
 };
 
-cracked.participantChain = function (freq) {  
-  cracked().begin("participant",{class: "sound"}).
-    sine({frequency: freq}).
-    gain(0.5).end("participant");
+cracked.participantChain = function () {  
+  cracked().
+    begin("participant").
+    sine(0).
+    gain(0).
+    end("participant");
   return cracked;
 };
 
 cracked.observerChain = function (id, freq, gain) {
-  cracked().begin("observer", {id: id}).
-    sine({frequency: freq}).
-    gain(gain).end("observer");
+  cracked().
+    begin("observer", {'id': id}).
+    sine({'id': id+'observerSine', 'frequency': freq}).
+    gain({'id': id+'observerGain', 'gain': gain}).
+    end("observer");
   return cracked;
 };
 
@@ -122,7 +126,7 @@ Room.connect = function (room) {
       m.redraw();
       messages = document.getElementById("messages");
       messages.scrollTop = messages.scrollHeight;
-      App.soundCallback(dat);
+      T.when(App.soundCallback, function () { App.soundCallback(dat); });
     };
     
     App.socket.onerror = function (e) {
@@ -169,18 +173,22 @@ Room.sendMessage = function (app) {
 };
 
 Room.participantSoundSetup = function (app) {
+  cracked().participantChain().dac();
+  cracked("participant").start();
+
   return m.request({ method: "GET",
                      url: "/pando/api/rooms/info/"+app.room.name()+"/"+app.room.user() }).
     then(function (resp) {
       var freq = ST.coordToFrequency(resp.fundamental, resp.dimensions, resp.coord);
-      cracked().participantChain(freq).dac();
-      cracked("participant").start();
+      cracked("participant").frequency(freq).volume(0.01);
+            
       app.soundCallback = participantCallback;
       app.killSoundCallback = participantKill;
       app.hasSound = true;
-      app.freq(freq);
+      app.room.freq(freq);
       app.room.dimensions(resp.dimensions);
       app.room.coord(resp.coord);
+      console.log(app);
     }).catch(function (e) {
       app.errors().push(e.message);
       resetAppSound(App);
@@ -273,15 +281,17 @@ Room.conversation = {
         view.push(Views.room.participantView(App.room, Room.sendMessage(App)));
       }
       if (!App.hasSound) {
-        view.push(m("div.container.popup",
-                    Views.room.audioPrompt(App,
-                                           function () {
-                                             if (App.room.user() == "observer")
-                                               Room.observerSoundSetup(App);
-                                             else
-                                               Room.participantSoundSetup(App);
-                                           },
-                                           function () { m.route("/pando"); })));
+        view.push(
+          m("div.container.popup",
+            Views.room.audioPrompt(
+              App,
+              function () {
+                if (App.room.user() == "observer")
+                  Room.observerSoundSetup(App);
+                else
+                  Room.participantSoundSetup(App);
+              },
+              function () { m.route("/pando"); })));
       }
     }
     return m("div.container", view);
@@ -292,14 +302,13 @@ var Index = {
   controller: function () {
     App.room = App.room || new Room();
     App.reconnect = false;
-    //if (typeof this.rooms === "undefined")
     this.rooms = new RoomList();
-
+  },
+  view: function (ctl) {
     var body = document.getElementsByTagName("body")[0];
     body.classList.remove("full_height");
     body.classList.add("auto_height");
-  },
-  view: function (ctl) {
+    
     return m("div.container", [
       m("div#appTitle",
         m("div.title_text", m("p", "Pando")),
@@ -314,7 +323,8 @@ var Index = {
               m.route("/pando/"+room.name());
             });
           });
-        })]);
+        })
+    ]);
   }
 };
 

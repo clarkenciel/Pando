@@ -8,18 +8,23 @@
   "Generate all possible new values for each dimension in a point,
   assuming stepwise motion. E.g. [0 1] -> [(1 0 -1) (0 1 2)]"
   [point]
-  (mapv (fn [c] (map #(+ c %) [1 0 -1])) point))
+  (mapv (juxt identity inc dec) point))
+
+(def memo-stepwise-per-dimension (memoize stepwise-per-dimension))
 
 (defn stepwise-per-point
   "Generate all possible new positions for a 2D point,
   assuming stepwise motion."
   [point]
-  (let [[xs ys] (stepwise-per-dimension point)]
-    (for [x xs y ys] [x y])))
+  (let [[xs ys] (memo-stepwise-per-dimension point)]
+    (for [x xs y ys :when (not= x y)] [x y])))
 
-(defn manhattan-distance
-  [start-pt end-pt]
-  (apply + (map #(Math/abs (- %1 %2)) start-pt end-pt)))
+(def memo-stepwise-per-point (memoize stepwise-per-point))
+
+(defn manhattan-distance [start-pt end-pt]
+  (reduce + (mapv #(Math/abs (- %1 %2)) start-pt end-pt)))
+
+(def memo-manhattan-distance (memoize manhattan-distance))
 
 (defn manhattan-distances
   "Find the manhattan/taxi distance between each point in to-coll
@@ -27,7 +32,7 @@
   [from-coll to-coll]
   (for [start from-coll
         end   to-coll]
-    (manhattan-distance start end)))
+    (memo-manhattan-distance start end)))
 
 (defn total-m-distances
   "Find the total manhattan/taxi distance between each point in
@@ -35,31 +40,22 @@
   [from-coll to-coll]
   (->> (manhattan-distances from-coll to-coll)
        (partition-all (count from-coll))
-       (map #(apply + %))))
+       (map #(reduce + %))))
 
-(defn filter-diagonals [pts]
-  (filter (fn [[x & xs]]
-            (not (every?
-                  #(= (Math/abs %)
-                      (Math/abs x))
-                  xs)))
-          pts))
+(defn no-dupes [coll-one]
+  (filter (fn [pt] (not (some #{pt} coll-one)))))
 
-(defn filter-duplicates [coll pts]
-  (filter (fn [pt] (not (some #{pt} coll)))
-          pts))
+(def next-steps (mapcat memo-stepwise-per-point))
 
 (defn next-tenney-layer
   "Generate a layer of coordinates according to Tenney's algorithm.
   NB: ASSUMES 2 DIMENSIONS FOR NOW."
   [current-crystal]
-  (->> current-crystal
-       (mapcat stepwise-per-point)
-       filter-diagonals
-       (filter-duplicates current-crystal)))
+  (let [builder (comp next-steps (no-dupes current-crystal))]
+    (sequence builder current-crystal)))
 
 (defn next-coord [used-pitches]
-  (if (= 0 (count used-pitches))
+  (if (empty? used-pitches)
     [0 0]
     (let [layer (next-tenney-layer used-pitches)]
       (->> layer
@@ -80,4 +76,17 @@
              (zipmap dimensions coord))]
     (Math/abs (* fundamental rat))))
 
-(def memo-next-coord (memoize next-coord))
+;;; start of transducer-based refactor
+(defn m-distance-finding [coll]
+  (fn [reduction]
+    (fn
+      ([acc] acc)
+      ([acc pt]
+       (reduction acc (reduce + (mapv #(manhattan-distance pt %) coll)))))))
+
+(defn step-finding [reduction]
+  (fn
+    ([acc] acc)
+    ([acc pt]
+     (reduction acc pt))))
+

@@ -26,7 +26,11 @@ exports.participantView = function (ctl, formCallback) {
     m("div#messageForm", [
       m("form", [
         m("textarea#messageBody.medium_text",
-          { oninput: m.withAttr("value", ctl.currentMessage) },
+          { oninput: function (e) {
+            ctl.currentMessage(e.target.value);
+            if (ctl.entryStart === null) ctl.entryStart(Date.now());
+          }
+          },
           ctl.currentMessage()),
         m("div#messageSend.button",
           { onlick: formCallback,

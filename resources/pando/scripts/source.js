@@ -8,14 +8,14 @@ var ST = require('./audio/utils.js');
 var IMOBILE = T.any([/iPad/i, /iPod/i, /iPhone/i],
                     function (p) { return navigator.userAgent.match(p) != null; });
 
-// 
-// VIEW MODELS
+// Structs
 var App =  {
   socket: null,
   room: null,
   reconnect: false,
   hasSound: false,
   soundCallback: null,
+  soundParams: null,
   errors: m.prop([])
 };
 
@@ -28,6 +28,7 @@ var Room = function (roomName, userName) {
   this.socket = m.prop(null);
   this.messages = m.prop([]);
   this.currentMessage = m.prop("");
+  this.entryStart = m.prop(null);
 };
 
 var RoomList = function () {
@@ -39,6 +40,91 @@ var RoomList = function () {
         list: data.rooms
       };
     });
+};
+
+var ParticipantParams = function () {
+  this._maxInterval = 15000;
+  this._minInterval = 100;
+  this._maxDelay = 5;
+  this._minDelay = 0.1;
+  this._maxDecay = 0.25;
+  this._minDecay = 0.0125;
+  this._maxEntropy = 1.0;
+  this._minEntropy = 0.0;
+  this._entropyDecayRate = Math.random() * 0.08;
+  this._entropy = 0.5;
+
+  this._interval = this._minInterval;
+  this._delay = this._minDelay;
+  this._decay = this._minDecay;
+
+  // entropy gradually lessens
+  this.entropy = function (amt) {
+    return typeof amt === 'undefined' ? this.getEntropy() : this.setEntropy(amt);
+  };
+  
+  this.getEntropy = function () {
+    var out = Math.ceil((Math.random() - 1.0) + this._entropy);    
+    this._entropy *= 1.0 - this._entropyDecayRate;
+    if (this._entropy < this._minEntropy) this._entropy = this._minEntropy;
+    return out;
+  };
+
+  this.setEntropy = function (amt) {
+    this._entropy = amt > this._maxEntropy ? this._maxEntropy : amt;
+    return this;
+  };
+
+  this.interval = function (newInterval) {
+    return typeof newInterval === 'undefined' ? this.getInterval() : this.setInterval(newInterval);
+  };
+
+  // interval gradually lengthens
+  this.getInterval = function () {
+    this._interval = this._interval * 1.1 > this._maxInterval ? this._maxInterval : this._interval * 1.1;
+    return this._interval;    
+  };
+
+  this.setInterval = function (amt) {
+    if (amt > this._maxInterval) this._interval = this._maxInterval;
+    else if (amt < this._minInterval) this._interval = this._minInterval;
+    else this._interval = amt;
+    return this;
+  };
+
+  this.delay = function (newDelay) {
+    return typeof newDelay === 'undefined' ? this.getDelay() : this.setDelay(newDelay);
+  };
+
+  // delay gradually lengthens
+  this.getDelay = function () {
+    this._delay = this._delay * 1.1 > this._maxDelay ? this._maxDelay : this._delay * 1.1;
+    return this._delay;
+  };
+
+  this.setDelay = function (amt) {
+    if (amt > this._maxDelay) this._delay = this._maxDelay;
+    else if (amt < this._minDelay) this._delay = this._minDelay;
+    else this._delay = amt;
+    return this;
+  };
+  
+  this.decay = function (newDecay) {
+    return typeof newDecay === 'undefined' ? this.getDecay() : this.setDecay(newDecay);
+  };
+
+  this.setDecay = function (amt) {
+    if (amt > this._maxDecay) this._decay = this._maxDecay;
+    else if (amt < this._minDecay) this._decay = this._minDecay;
+    else this._decay = amt;
+    return this;
+  };
+
+  // decay gradually lengthens
+  this.getDecay = function () {
+    this._decay = this._decay * 1.01 > this._maxDecay ? this._maxDecay : this._decay * 1.01;
+    return this._decay;
+  };
 };
 
 var whenUserValid = function (room, success) {
@@ -67,15 +153,17 @@ var resetAppSound = function (app) {
 
 var participantCallback = function (dat) {
   T.when(dat.newRoot, function () {
+    console.log(dat.userName, App.room.user());
     if (dat.userName != App.room.user() && App.sound !== null) {
       App.room.freq(ST.coordToFrequency(dat.newRoot, App.room.dimensions(), App.room.coord()));
-      cracked("participant").frequency(App.room.freq());
+      cracked('noiseChain').frequency(App.room.freq());
+      cracked.loop('stop').loop({steps:2,interval:App.soundParams.interval()}).loop('start');
     };
   });
 };
 
 var participantKill = function () {
-  cracked("participant").stop();
+  cracked('noiseChain').stop();
 };
 
 var observerCallback = function (dat) {
@@ -83,7 +171,7 @@ var observerCallback = function (dat) {
   App.room.freq(dat.newRoot);
   if (dat.userName != App.room.name()) {
     cracked("#"+dat.userName).
-      frequency(ST.coordToFrequency(App.room.freq, App.room.dimensions(), dat.coord));
+      frequency(ST.coordToFrequency(App.room.freq(), App.room.dimensions(), dat.coord));
   }
 };
 
@@ -91,12 +179,9 @@ var observerKill = function () {
   cracked("observer").stop();
 };
 
-cracked.participantChain = function () {  
-  cracked().
-    begin("participant").
-    sine(0).
-    gain(0).
-    end("participant");
+cracked.participantChain = function (opts) {
+  cracked().begin("participant").sine(0).end("participant");
+      
   return cracked;
 };
 
@@ -158,29 +243,89 @@ Room.quit = function (room) {
 
 Room.sendMessage = function (app) {
   return function () {
-    if (app.room.currentMessage().length > 0) {
-      var out = {
-        "message": app.room.currentMessage,
-        "userName": app.room.user,
-        "roomName": app.room.name,
-        "frequency": 0,
-        "coord": app.room.coord
-      };    
+    var message = app.room.currentMessage();
+    if (message.length > 0) {
+      var entryDuration = (Date.now() - app.room.entryStart()) * 0.00000000002,
+          entryAvg = message.split("").length / entryDuration,
+          out = {
+            "message": message,
+            "userName": app.room.user,
+            "roomName": app.room.name,
+            "frequency": 0,
+            "coord": app.room.coord
+          };
       app.socket.send(JSON.stringify(out));
+      app.soundParams.entropy(entryAvg);
+      app.soundParams.interval(entryAvg);
+      app.soundParams.decay(0);
+      app.soundParams.delay(0);
+      cracked.loop('stop').
+        loop({steps:2,interval:app.soundParams.interval()}).
+        loop('start');
+      console.log(entryAvg);
+      console.log(app.soundParams);
       app.room.currentMessage("");
+      app.room.entryStart(null);
     };
   };
 };
 
+cracked.noiseChain = function (opts) {
+  cracked.begin('noiseChain').
+    sine({id:opts.id,frequency:opts.frequency}).
+    gain({'gain':opts.gain}).
+    end('noiseChain');
+  return cracked;
+};
+
 Room.participantSoundSetup = function (app) {
-  cracked().participantChain().dac();
-  cracked("participant").start();
+  
+  app.soundParams = new ParticipantParams();
+  
+  cracked().
+    noiseChain({id:'participant',frequency:0,q:200,gain:0.4}).
+    adsr({id:'notes'}).
+    gain({id:'master', gain:0}).
+    dac();
+  cracked('#notes').
+    comb({id:'masterDelay',delay: app.soundParams.delay()}).
+    connect('#master');
+  cracked('*').start();
+  
+  cracked.loop({steps:2,interval:app.soundParams.interval()});
+  cracked("sine,adsr").bind("step", function (index, data, array) {
+    var freq,
+        env = [0.0125,app.soundParams.decay(),0.1,0.1];
+
+    // adjust frequency
+    if (app.soundParams.entropy()) {
+      freq = ST.coordToFrequency(app.room.freq(),
+                                 app.room.dimensions(),
+                                 app.room.coord().map(function (c) {
+                                   return c + cracked.random(-3,3);
+                                 }));
+    }
+    else {
+      freq = app.room.freq();
+    }    
+    cracked('noiseChain').frequency(freq);
+
+    // adjust delay
+    cracked('#masterDelay').attr({delay: app.soundParams.delay()});
+    cracked('#notes').adsr('trigger',env);
+
+    // adjust interval
+    cracked.loop('stop').loop({steps:2,interval:app.soundParams.interval()}).loop('start');
+  }, [1,0]);
 
   return m.request({ method: "GET",
                      url: "/pando/api/rooms/info/"+app.room.name()+"/"+app.room.user() }).
     then(function (resp) {
       var freq = ST.coordToFrequency(resp.fundamental, resp.dimensions, resp.coord);
-      cracked("participant").frequency(freq).volume(0.01);
+      cracked("#participant").frequency(freq);
+      //cracked('drone').frequency(ST.constrainFrequency(400,1200,freq * 0.5));
+      cracked('#master').ramp(0.1,0.1,'gain',0.0);
+      cracked.loop("start");
             
       app.soundCallback = participantCallback;
       app.killSoundCallback = participantKill;
@@ -197,23 +342,27 @@ Room.participantSoundSetup = function (app) {
 };
 
 Room.observerSoundSetup = function (app) {
+  // cracked().observerChain().dac();
+  cracked('*').start();
+  
   return m.request({ method:"GET",
                      url: "/pando/api/rooms/info/users/"+app.room.name()}).
     then(function (resp) {
+      var freq;
       for (var user in resp.users) {
-        var freq = ST.coordToFrequency(resp.root, resp.dimensions, resp.users[user].coord);
-        cracked().observerChain(user, freq).dac();
+        freq = ST.coordToFrequency(resp.root, resp.dimensions, resp.users[user].coord);
+        cracked().observerChain(user, freq, 0.3).dac();
         cracked("observer").start();
       }
       app.soundCallback = observerCallback;
       app.killSoundCallback = observerKill;
       app.hasSound = true;
-      app.freq(resp.root);
+      app.room.freq(resp.root);
       app.room.dimensions(resp.dimensions);
       app.room.coord([0,0]);
       console.log("observer response", resp);
     }).catch(function (e) {
-      console.log("observer error", e);
+      console.log("observerx error", e);
     });
 };
 

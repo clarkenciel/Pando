@@ -30,7 +30,7 @@
   (reduce (fn [acc _] (inc acc)) 0 users))
 
 (defn upsert-user [{users :users :as room} username]
-  (let [new-coord (tenney/memo-next-coord (map :coord (vals users)))]
+  (let [new-coord (tenney/next-coord (map :coord (vals users)))]
     (assoc-in room [:users username] {:coord new-coord})))
 
 (defn remove-user [{users :users :as room} username]

@@ -23,7 +23,7 @@
 
 (defn add-room
   [{:keys [used-coords root dimensions] :as site} room-name]
-  (let [new-coord (tenney/memo-next-coord used-coords)
+  (let [new-coord (tenney/next-coord used-coords)
         new-room  (rooms/make-room
                    room-name
                    (tenney/coord->freq root dimensions new-coord)

@@ -323,8 +323,7 @@ Room.participantSoundSetup = function (app) {
     then(function (resp) {
       var freq = ST.coordToFrequency(resp.fundamental, resp.dimensions, resp.coord);
       cracked("#participant").frequency(freq);
-      //cracked('drone').frequency(ST.constrainFrequency(400,1200,freq * 0.5));
-      cracked('#master').ramp(0.1,0.1,'gain',0.0);
+      cracked('#master').ramp(0.3,0.1,'gain',0.0);
       cracked.loop("start");
             
       app.soundCallback = participantCallback;

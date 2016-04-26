@@ -401,6 +401,7 @@ Room.conversation = {
                     sessionStorage.getItem('room'));
       };
       App.socket.close();
+      cracked().loop('stop');
       cracked('*').stop();
       App.hasSound = false;
     };
@@ -410,6 +411,7 @@ Room.conversation = {
       console.log("Back navigation detected, logging out", e);
       App.reconnect = false;
       App.socket.close();
+      cracked().loop('stop');
       cracked('*').stop();
       App.hasSound = false;
       m.route("/pando");

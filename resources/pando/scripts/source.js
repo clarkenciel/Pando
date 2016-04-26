@@ -321,17 +321,19 @@ Room.participantSoundSetup = function (app) {
   return m.request({ method: "GET",
                      url: "/pando/api/rooms/info/"+app.room.name()+"/"+app.room.user() }).
     then(function (resp) {
-      var freq = ST.coordToFrequency(resp.fundamental, resp.dimensions, resp.coord);
-      cracked("#participant").frequency(freq);
-      cracked('#master').ramp(0.5,0.1,'gain',0.0);
-      cracked.loop("start");
-            
-      app.soundCallback = participantCallback;
-      app.killSoundCallback = participantKill;
-      app.hasSound = true;
-      app.room.freq(freq);
-      app.room.dimensions(resp.dimensions);
-      app.room.coord(resp.coord);
+      if (!app.hasSound) {
+        var freq = ST.coordToFrequency(resp.fundamental, resp.dimensions, resp.coord);
+        cracked("#participant").frequency(freq);
+        cracked('#master').ramp(0.5,0.1,'gain',0.0);
+        cracked.loop("start");
+        
+        app.soundCallback = participantCallback;
+        app.killSoundCallback = participantKill;
+        app.hasSound = true;
+        app.room.freq(freq);
+        app.room.dimensions(resp.dimensions);
+        app.room.coord(resp.coord);
+      }
       console.log(app);
     }).catch(function (e) {
       app.errors().push(e.message);
@@ -399,6 +401,7 @@ Room.conversation = {
                     sessionStorage.getItem('room'));
       };
       App.socket.close();
+      cracked('*').stop();
       App.hasSound = false;
     };
 
@@ -407,6 +410,7 @@ Room.conversation = {
       console.log("Back navigation detected, logging out", e);
       App.reconnect = false;
       App.socket.close();
+      cracked('*').stop();
       App.hasSound = false;
       m.route("/pando");
     };

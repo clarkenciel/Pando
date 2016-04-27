@@ -23,26 +23,42 @@ exports.label = function (labelText, dataName) {
 };
 
 exports.button = function (buttonText, buttonCss, onClick) {
+  var realOnClick = function (e) {
+    e.preventDefault();
+    return onClick();
+  };
   return [m("div.buttonRow",
             m("button.button.big_text" + buttonCss,
-              { onclick: onClick,
+              { onclick: realOnClick,
                 config: Touch.touchHelper({
-                  tap: onClick })},
+                  tap: realOnClick })},
               buttonText)),
           m("br")];
 };
 
 exports.textInput = function (labelName, dataName, attr) {
-  return exports.label(labelName, dataName).
-    concat([m("input.big_text",
-              { type: "text",
-                name: dataName,
-                onkeyup: m.withAttr("value",
-                                       function (value) {
-                                         attr(value);
-                                         m.redraw.strategy("none");
-                                       }),
-                value: attr() })]);
+  return [ exports.label(labelName, dataName)
+           , m("input.big_text",
+               { type: "text",
+                 name: dataName,
+                 onkeyup: m.withAttr("value",
+                                     function (value) {
+                                       attr(value);
+                                       m.redraw.strategy("none");
+                                     }),
+                 onkeydown: m.withAttr("value",
+                                     function (value) {
+                                       attr(value);
+                                       m.redraw.strategy("none");
+                                     }),
+                 oninput: m.withAttr("value",
+                                     function (value) {
+                                       attr(value);
+                                       m.redraw.strategy("none");
+                                     }),
+                 value: attr()
+               })
+         ];
 };
 
 exports.modelNameRadio = function (model) {

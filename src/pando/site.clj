@@ -36,8 +36,9 @@
   (assoc site :rooms (dissoc rooms room-name)))
 
 (defn modify-room [site room-name f]
-  (let [room (get-room site room-name)]
-    (assoc-in site [:rooms room-name] (f room))))
+  (if-let [room (get-room site room-name)]
+    (assoc-in site [:rooms room-name] (f room))
+    site))
 
 (defn maybe-add-room [site room-name]
   (if (room-exists? site room-name)

@@ -22,21 +22,33 @@
 ;;; SITE
 (def site (atom (site/make-site "Pando" (* 4 49.00) [2 5]))) ; tune to G1
 (def chatrooms (bus/event-bus))
-(def workers (atom {:rooms [] :users []}))
+(def workers (agent {}))
 
 ;;; VALIDATION
 
-(defn is-observer? [user-name]
+(defn is-observer?
+  "Is a given user an observer?"
+  [user-name]
   (= (clojure.string/lower-case user-name)
      "observer"))
 
-(defn user-name-available? [site room-name user-name]
-  (not (contains? (get-in site [:rooms room-name :users]) user-name)))
+(defn user-name-available?
+  "Is there a room with the given user name in the site?"
+  [site room-name user-name]
+  (not (contains? (get-in site [:rooms room-name :users])
+                  user-name)))
 
-(defn stale-user? [site room-name user-name]
+(defn fresh-user?
+  "Have we received a ping from the user in the past minute?"
+  [site room-name user-name]
   (let [last-ping (get-in site [:rooms room-name :users user-name :last-ping])]
-    (time/before? last-ping
+    (time/after? last-ping
                   (time/minus (time/now) (time/minutes 1)))))
+
+(defn room-valid?
+  "Does the room have at least one member?"
+  [site room-name]
+  (< 0 (count (get-in site [:rooms room-name :users] []))))
 
 ;;; RESPONSES
 
@@ -69,41 +81,51 @@
    :body (json-body body)})
 
 ;;; SITE-LEVEL ROOM AND USER MANIPULATION
-(defn add-worker [type name interval continue? final]
+(defn clear-worker [worker-type worker-name]
   (fn [q]
-    (assoc q type
-           (conj (get q type)
-                 (future
-                   (println "watching" type name)
-                   (loop [t (Thread/sleep interval)]
-                     (println "check for " type name)
-                     (if (continue?)
-                       (final)
-                       (recur (Thread/sleep interval)))))))))
+    (when-let [worker (get-in q [worker-type worker-name] nil)]
+      (when (not (future-done? worker))
+        (future-cancel worker)))
+    (assoc q worker-type
+           (dissoc (get q worker-type) worker-name))))
+
+(defn add-worker [worker-type worker-name interval continue? final]
+  (fn [q]
+    (if-let [worker (get-in q [worker-type worker-name])]
+      q
+      (assoc q worker-type
+             (assoc (get q worker-type) worker-name
+                    (future                      
+                      (loop [t (Thread/sleep interval)]                        
+                        (if (not (continue?))
+                          (final)
+                          (recur (Thread/sleep interval))))))))))
 
 (defn remove-user! [room-name user-name]
-  (swap! site (fn [s] (site/modify-room s room-name #(rooms/remove-user % user-name)))))
+  (do (swap! site (fn [s] (site/modify-room s room-name #(rooms/remove-user % user-name))))
+      (send workers (clear-worker :user user-name))))
 
 (defn add-user! [room-name user-name]
   (let [s (swap! site
                  (fn [s]
                    (site/modify-room
                     s room-name #(rooms/upsert-user % user-name))))]
-    (swap! workers
-           (add-worker :user user-name (* 1000 60)
-                       #(stale-user? @site room-name user-name)
-                       #(remove-user! room-name user-name)))
+    (send workers
+          (add-worker :user user-name (* 1000 10) ; every ten seconds
+                      #(fresh-user? @site room-name user-name)
+                      #(remove-user! room-name user-name)))
     s))
 
 (defn remove-room! [room-name]
-  (swap! site #(site/remove-room % room-name)))
+  (do (swap! site #(site/remove-room % room-name))
+      (send workers (clear-worker :room room-name))))
 
 (defn add-room! [room-name]
   (let [s (swap! site #(site/add-room % room-name))]
-    (swap! workers
-           (add-worker :room room-name (* 1000 60 60)
-                       #(<= 0 (count (get-in @site [:rooms room-name :users] [])))
-                       #(remove-room! room-name)))
+    (send workers
+          (add-worker :room room-name (* 1000 60 2) ; every two minutes
+                      #(room-valid? @site room-name)
+                      #(remove-room! room-name)))
     s))
 
 (defn shift-room! [room-name freq]
@@ -119,8 +141,10 @@
       (assoc message "newRoot" root))))
 
 (defn update-ping-from-message! [{user-name "userName" room-name "roomName" :as message}]
-  (do    
+  (do
+    (println 'ping! user-name (get-in @site [:rooms room-name :users user-name :last-ping]))
     (swap! site #(site/update-user-ping % room-name user-name))
+    (println (get-in @site [:rooms room-name :users user-name :last-ping]))
     message))
 
 (defn ping? [{type "type"}] (= type "ping"))

@@ -85,41 +85,56 @@
                 % room-name
                 (partial rooms/shift-room freq))))
 
-;; I feel like this could be broken out more
-(defn pack-room-shift! [user-name room-name message]
-  (try
-    (let [decoded-message (chesh/decode message)
-          room (-> room-name
-                   (shift-room! (get decoded-message "frequency"))
-                   (site/get-room room-name))] 
-      (chesh/generate-string
-       (assoc decoded-message "newRoot" (:root room))))
-    (catch Exception e
-      (do (println e)
-          message))))
+;;; Message-processing transducers
+(defn shift-room-from-message! [{room-name "roomName" freq "frequency" :as message}]  
+  (if-not freq
+    message
+    (let [{root :root}  (site/get-room room-name (shift-room! room-name freq))]
+      (assoc message "newRoot" root))))
+
+(defn update-ping-from-message! [{user-name "userName" room-name "roomName" :as message}]
+  (do    
+    (swap! site #(site/update-user-ping % room-name user-name))
+    message))
+
+(defn ping? [{type "type"}] (= type "ping"))
+
+(def decode (map chesh/decode))
+
+(def process-pings! (map update-ping-from-message!))
+
+(def remove-pings (filter (comp not ping?)))
+
+(def shift! (map shift-room-from-message!))
+
+(def encode (map chesh/generate-string))
 
 (defn connect! [room-name user-name]
   (fn [conn]
     ;; handler for disconnects
+    ;; remove this handler in favor of a checker thread
     (s/on-closed conn
                  #(do (bus/publish! chatrooms room-name
                                     (chesh/generate-string
                                      {:userName room-name
+                                      :type "message"
                                       :message (str user-name " has left... :(")}))
-                      (remove-user! room-name user-name)))
+                      ))
     
     ;; chatrooms bus -> websocket
     (s/connect (bus/subscribe chatrooms room-name) conn)
 
     ;; websocket -> chatrooms bus (kind of doseq for streams)
     (s/consume
-     #(bus/publish! chatrooms room-name (pack-room-shift! user-name room-name %))
-     (s/throttle 10 conn))
+     #(bus/publish! chatrooms room-name %)
+     (s/throttle 10000 (s/transform (comp decode process-pings! remove-pings shift! encode)
+                                 conn)))
     
     ;; update everyone to new member
     (bus/publish! chatrooms room-name
                   (chesh/generate-string
                    {:userName room-name
+                    :type "message"
                     :message (str user-name " has joined!")}))))
 
 ;; HELPERS
@@ -189,6 +204,7 @@
          (with-user-check room-name user-name)))))
 
 (defn remove-user-handler [req]
+  (println "remove user" req)
   (let [user-name  (get-in req [:body "user-name"])
         room-name  (get-in req [:body "room-name"])]
     (when (and user-name room-name)

@@ -7,10 +7,9 @@
     [:title "Pando"]
     [:meta {:name "viewport" :content "initial-scale=1.0"}]
     (include-css "/pando/styles/main.css")
-    ;;(include-js "/pando/scripts/cracked/dist/cracked.min.js")
     (include-js "/pando/scripts/cracked/dist/cracked.js")]
    [:body
-    [:div {:id "app"} (include-js "/pando/scripts/main.min.js")]]
+    [:div {:id "app"} (include-js "/pando/scripts/main.js")]]
    [:footer.tiny_text
     [:div
      [:p "&#169; Danny Clarke, 2016 "]]

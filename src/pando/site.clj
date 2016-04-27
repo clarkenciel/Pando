@@ -43,3 +43,8 @@
   (if (room-exists? site room-name)
     site
     (add-room site room-name)))
+
+(defn update-user-ping [site room-name user-name]
+  (if-let [user (get-in site [:rooms room-name :users user-name])]
+    (assoc-in site [:rooms room-name :users user-name] (rooms/update-ping user))
+    site))

@@ -33,6 +33,9 @@
   (let [new-coord (tenney/next-coord (map :coord (vals users)))]
     (assoc-in room [:users username] {:coord new-coord})))
 
+(defn update-ping [user]
+  (assoc user :ping-time (clj-time.core/now)))
+
 (defn remove-user [{users :users :as room} username]
   (assoc room :users (dissoc users username)))
 

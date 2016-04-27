@@ -8,6 +8,27 @@ var ST = require('./audio/utils.js');
 var IMOBILE = T.any([/iPad/i, /iPod/i, /iPhone/i],
                     function (p) { return navigator.userAgent.match(p) != null; });
 
+var interrupt = function (e) {
+  console.log("Back navigation detected, logging out", e);
+  Room.quit(App.room).then(function () {
+    try {
+      sessionStorage.setItem('roomName', App.room.name());
+      sessionStorage.setItem('userName', App.room.user());
+
+      App.reconnect = false;
+      App.socket && App.socket.close();
+      App.socket = null;
+      cracked().loop('stop');
+      cracked('*').stop();
+      App.hasSound = false;
+    }
+    catch (e) {
+      console.log('log out error', e);
+      App.errors().push(e.message);
+    }
+  });
+};
+
 // Structs
 var App =  {
   socket: null,
@@ -204,15 +225,13 @@ Room.connect = function (room) {
     App.socket.close();
     App.socket = null;
     console.log("error:", e);
-    App.errors().push('The user name <'+App.room.user()+'> is taken, please choose a different user name.');
-    m.route(room.name());
+    App.errors().push('The user name <'+App.room.user()+'> is taken, please choose a different user name.');    
+    m.route('/pando/'+room.name());
   };
 
   App.socket.onclose = function (e) {
-    console.log("closing socket", e);
-    Room.connect(room);
+    console.log("closing socket", e);    
     App.socket = null;
-    //resetAppSound(App);
   };
   
   App.socket.onopen = function (x) {
@@ -222,17 +241,19 @@ Room.connect = function (room) {
     console.log("socket opened");
 
     // move us to the room if we logged in via the landing page
+    console.log('onopen', App.room.name(), App.room.user());
     m.route('/pando/'+App.room.name()+'/'+App.room.user());
-
     
     App.socket.onmessage = function (message) {
-      var messages, dat = JSON.parse(message.data);
+      var messages, dat = JSON.parse(message.data), tries = 10;
 
       if (dat.type != 'ping')
         App.room.messages().push(dat);
       console.log('received type', dat.type);
       m.redraw();
-      messages = document.getElementById("messages");
+      
+      messages = document.getElementById("messages");      
+      console.log(messages);
       messages.scrollTop = messages.scrollHeight;
       T.when(App.soundCallback, function () { App.soundCallback(dat); });
     };    
@@ -354,23 +375,26 @@ Room.participantSoundSetup = function (app) {
     then(function (resp) {
       console.log("info response",resp);
       if (!app.hasSound) {
-        var freq = ST.coordToFrequency(resp.fundamental, resp.dimensions, resp.coord);
-        cracked("#participant").frequency(freq);
-        cracked('#master').ramp(0.5,0.1,'gain',0.0);
-        cracked.loop("start");
-        
-        app.soundCallback = participantCallback;
-        app.killSoundCallback = participantKill;
-        app.hasSound = true;
-        app.room.freq(freq);
-        app.room.dimensions(resp.dimensions);
-        app.room.coord(resp.coord);
+        try {
+          var freq = ST.coordToFrequency(resp.fundamental, resp.dimensions, resp.coord);
+          cracked("#participant").frequency(freq);
+          cracked('#master').ramp(0.5,0.1,'gain',0.0);
+          cracked.loop("start");
+          
+          app.soundCallback = participantCallback;
+          app.killSoundCallback = participantKill;
+          app.hasSound = true;
+          app.room.freq(freq);
+          app.room.dimensions(resp.dimensions);
+          app.room.coord(resp.coord);
+        }
+        catch (e) {
+          console.log('sound creation error', e);                    
+          app.errors().push(e.message);
+          resetAppSound(App);
+          m.route("/pando");
+        }
       }
-      console.log(app);
-    }).catch(function (e) {
-      app.errors().push(e.message);
-      resetAppSound(App);
-      m.route("/pando");
     });
 };
 
@@ -400,10 +424,10 @@ Room.observerSoundSetup = function (app) {
 };
 
 Room.fetch = function (item) {
-  if (sessionStorage.getItem(item))
+  if (m.route.param(item) != '')
+    return m.route.param(item);  
+  else if (sessionStorage.getItem(item))
     return sessionStorage.getItem(item);
-  else if (m.route.param(item) != '')
-    return m.route.param(item);
   else
     return null;
 };
@@ -415,48 +439,29 @@ Room.conversation = {
         roomName = Room.fetch('roomName'),
         userName = Room.fetch('userName');
     sessionStorage.clear();
+    //console.log('convesration', roomName, userName);
     App.room = new Room(roomName, userName);   
     body.classList.remove("auto_height");
     body.classList.add("full_height");
 
     // store data if the page refreshes and allow reconnect
-    window.onbeforeunload = function (e) {
-      Room.quit(App.room).then(function () {
-        var navType = window.performance.navigation.type;
-        if (navType == 1) {
-          sessionStorage.setItem('roomName', App.room.name());
-          sessionStorage.setItem('userName', App.room.user());
-          console.log("refresh detected, stored:", App.room.name(), App.room.user());                    
-        };
-        App.socket.close();
-        
-        cracked().loop('stop');
-        cracked('*').stop();
-        App.hasSound = false;
-      });
-    };
+    window.onbeforeunload = interrupt;
 
     // handle back button navigation as a log out
     window.onpopstate = function (e) {
-      console.log("Back navigation detected, logging out", e);
-      sessionStorage.setItem('roomName', App.room.name());
-      sessionStorage.setItem('userName', App.room.user());
-      Room.quit(App.room);
-      App.reconnect = false;
-      App.socket.close();
-      App.socket = null;
-      cracked().loop('stop');
-      cracked('*').stop();
-      App.hasSound = false;
-      m.route("/pando");
+      interrupt(e);
+      m.route(m.route().split('/').slice(0,-1).join('/'));
     };
+    
+    if (!App.socket) {      
+      Room.connect(App.room);
+    }
   },
 
   view: function (ctl) {
     var view = [Views.room.errorDisplay(App)];
-    if (!App.socket) {
-      Room.connect(App.room);
-    } else if (App.socket.readyState == 1) {
+    //console.log('from convo view', App.socket);
+    if (App.socket.readyState == 1) {
       if (App.room.user() == "observer") {
         view.push(Views.room.observerView(App.room));
       }
@@ -488,8 +493,17 @@ var OnTheFly = {
   controller: function () {
     var roomName = Room.fetch('roomName'),
         userName = Room.fetch('userName');
+    console.log(window.onbeforeunload);
     sessionStorage.clear();
     App.room = new Room(roomName, userName);
+    // store data if the page refreshes and allow reconnect
+    window.onbeforeunload = interrupt;
+
+    // handle back button navigation as a log out
+    window.onpopstate = function (e) {
+      interrupt(e);
+      m.route(m.route().split('/').slice(0,-1).join('/'));
+    };
   },
   view: function (ctl) {
     var view = [Views.room.errorDisplay(App)];
@@ -509,17 +523,19 @@ var OnTheFly = {
 };
 
 var Index = {
-  controller: function () {    
+  controller: function () {
+    if (window.onbeforeunload) window.onbeforeunload = undefined;
+    if (window.onpopstate) window.onpopstate = undefined;
     App.reconnect = false;
-    App.room = App.room ? App.room : new Room();
-    console.log(App.room.name(), App.room.user());
+    App.room = App.room ? App.room : new Room();    
     this.rooms = new RoomList();
+    this.room = App.room;
   },
   view: function (ctl) {
     var body = document.getElementsByTagName("body")[0];
     body.classList.remove("full_height");
     body.classList.add("auto_height");
-    console.log(App);
+    console.log(ctl.room.user(), App.room.user());
     
     return m("div.container", [
       m("div#appTitle",
@@ -531,8 +547,10 @@ var Index = {
         function (room, roomList) {
           whenUserValid(room, function () {
             whenObserverValid(room, roomList, function () {
-              console.log("room", room);
-              Room.connect(room);
+              var dest = '/pando';
+              if (room.name()) dest += '/' + room.name();
+              if (room.user()) dest += '/' + room.user();
+              m.route(dest);
             });
           });
         })

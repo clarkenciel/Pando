@@ -12,6 +12,8 @@
 
 (def memo-stepwise-per-dimension (memoize stepwise-per-dimension))
 
+
+
 (defn stepwise-per-point
   "Generate all possible new positions for a 2D point,
   assuming stepwise motion."
@@ -90,3 +92,72 @@
     ([acc pt]
      (reduction acc pt))))
 
+
+(comment
+
+  ;; bet this can be a transducer....
+  (defn incrementer
+    "Start from the last sequencable in a vector of sequencables.
+     Return a new vector with the sequencable at the current index missing its head.
+     Repeat, targeting the same sequencable, until that sequencable is empty.
+     Repeat, moving backward through the vector, until all the sequencables have been
+     dealt with (i.e. index is -1)."
+    [originals]
+    (fn [v-seqs]
+      (loop [i       (dec (count v-seqs))
+             v-seqs' v-seqs]
+        (if (= i -1)
+          nil
+          (if-let [rst (next (v-seqs' i))]
+            (assoc v-seqs' i rst)
+            (recur (dec i) (assoc v-seqs' i (originals i))))))))
+
+  (defn stepper [increment-fn]
+    (fn [seqs]
+      (loop [accum []
+             seqs' seqs]        
+        (if (empty? seqs')
+          accum
+          (recur (conj accum (map (fn [s]
+                                    (first s)) seqs'))
+                 (increment-fn seqs'))))))
+
+  (defn cartesian-product [& seqs]
+    (when-let [vseqs (and (every? seq seqs) (vec seqs))]
+      (-> (vec vseqs)
+          incrementer
+          stepper
+          (apply [vseqs]))))
+  
+  (let [vsq [[1 2] [3 4] [5 6]]]
+    ;;((stepper (incrementer vsq)) vsq)
+    (apply cartesian-product vsq)
+    ;;(apply c-prod vsq)
+    ;;(apply cartesian-product vsq)
+    )
+
+  ;;; attempt at transducer version
+  (defn nexter [c]
+    (sequence (take-while (comp not nil?))
+              (iterate next c)))
+
+  (defn lift-conj-to [col]
+    (fn [x]
+      (if (sequential? col)
+        (conj col x)
+        (vector col x))))
+  
+  (defn c-prod [col1 col2]
+    (mapcat 
+     (fn [col]
+       (map
+        (lift-conj-to col)
+        col2))
+     col1))
+
+  (defn cartesian-product [cols]
+    (reduce c-prod cols))
+  
+  (def next-ducer (map nexter))
+  
+  )

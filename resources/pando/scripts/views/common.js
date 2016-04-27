@@ -25,21 +25,24 @@ exports.label = function (labelText, dataName) {
 exports.button = function (buttonText, buttonCss, onClick) {
   return [m("div.buttonRow",
             m("button.button.big_text" + buttonCss,
-              { onclick: onClick//, config: Touch.touchHelper({ tap: onClick })
-              },
+              { onclick: onClick,
+                config: Touch.touchHelper({
+                  tap: onClick })},
               buttonText)),
           m("br")];
 };
 
 exports.textInput = function (labelName, dataName, attr) {
   return exports.label(labelName, dataName).
-    concat([m("input.big_text", { type: "text",
-                                  name: dataName,
-                                  oninput: m.withAttr("value",
-                                                      function (value) {
-                                                        attr(value);
-                                                        m.redraw.strategy("none");}),
-                                  value: attr() })]);
+    concat([m("input.big_text",
+              { type: "text",
+                name: dataName,
+                onkeyup: m.withAttr("value",
+                                       function (value) {
+                                         attr(value);
+                                         m.redraw.strategy("none");
+                                       }),
+                value: attr() })]);
 };
 
 exports.modelNameRadio = function (model) {
@@ -49,6 +52,14 @@ exports.modelNameRadio = function (model) {
                 { type: "radio",
                   name: "roomName",
                   onclick: m.withAttr("value", model.name),
+                  config: Touch.touchHelper({
+                    tap: function (event) {
+                      //console.log('event', model.user(), model.name(), event.srcElement.value);
+                      event.preventDefault();                      
+                      model.name(event.srcElement.value);
+                      return event.srcElement.value;
+                    }
+                  }),
                   value: room.roomName }),
               m("div.radio_label.medium_text",
                 room.roomName + ", users: " + room.userCount))];

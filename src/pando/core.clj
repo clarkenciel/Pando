@@ -14,6 +14,7 @@
    [manifold.deferred :as d]
    [manifold.bus :as bus] 
    [cheshire.core :as chesh]
+   [clj-time.core :as time]
    [pando.rooms :as rooms]
    [pando.site :as site]
    [pando.templates :as t]))
@@ -21,6 +22,7 @@
 ;;; SITE
 (def site (atom (site/make-site "Pando" (* 4 49.00) [2 5]))) ; tune to G1
 (def chatrooms (bus/event-bus))
+(def workers (atom {:rooms [] :users []}))
 
 ;;; VALIDATION
 
@@ -30,6 +32,11 @@
 
 (defn user-name-available? [site room-name user-name]
   (not (contains? (get-in site [:rooms room-name :users]) user-name)))
+
+(defn stale-user? [site room-name user-name]
+  (let [last-ping (get-in site [:rooms room-name :users user-name :last-ping])]
+    (time/before? last-ping
+                  (time/minus (time/now) (time/minutes 1)))))
 
 ;;; RESPONSES
 
@@ -62,23 +69,42 @@
    :body (json-body body)})
 
 ;;; SITE-LEVEL ROOM AND USER MANIPULATION
+(defn add-worker [type name interval continue? final]
+  (fn [q]
+    (assoc q type
+           (conj (get q type)
+                 (future
+                   (println "watching" type name)
+                   (loop [t (Thread/sleep interval)]
+                     (println "check for " type name)
+                     (if (continue?)
+                       (final)
+                       (recur (Thread/sleep interval)))))))))
 
 (defn remove-user! [room-name user-name]
-  (swap! site
-         (fn [s]
-           (let [new-s (site/modify-room s room-name #(rooms/remove-user % user-name))]
-             (if (>= 0 (rooms/user-count (site/get-room new-s room-name)))
-               (site/remove-room new-s room-name)
-               new-s)))))
+  (swap! site (fn [s] (site/modify-room s room-name #(rooms/remove-user % user-name)))))
 
-(defn add-user! [room-name user-name]  
-  (swap! site (fn [s] (site/modify-room s room-name #(rooms/upsert-user % user-name)))))
-
-(defn add-room! [room-name]
-  (swap! site #(site/add-room % room-name)))
+(defn add-user! [room-name user-name]
+  (let [s (swap! site
+                 (fn [s]
+                   (site/modify-room
+                    s room-name #(rooms/upsert-user % user-name))))]
+    (swap! workers
+           (add-worker :user user-name (* 1000 60)
+                       #(stale-user? @site room-name user-name)
+                       #(remove-user! room-name user-name)))
+    s))
 
 (defn remove-room! [room-name]
   (swap! site #(site/remove-room % room-name)))
+
+(defn add-room! [room-name]
+  (let [s (swap! site #(site/add-room % room-name))]
+    (swap! workers
+           (add-worker :room room-name (* 1000 60 60)
+                       #(<= 0 (count (get-in @site [:rooms room-name :users] [])))
+                       #(remove-room! room-name)))
+    s))
 
 (defn shift-room! [room-name freq]
   (swap! site #(site/modify-room
@@ -114,12 +140,11 @@
     ;; handler for disconnects
     ;; remove this handler in favor of a checker thread
     (s/on-closed conn
-                 #(do (bus/publish! chatrooms room-name
-                                    (chesh/generate-string
-                                     {:userName room-name
-                                      :type "message"
-                                      :message (str user-name " has left... :(")}))
-                      ))
+                 #(bus/publish! chatrooms room-name
+                                (chesh/generate-string
+                                 {:userName room-name
+                                  :type "message"
+                                  :message (str user-name " has left... :(")})))
     
     ;; chatrooms bus -> websocket
     (s/connect (bus/subscribe chatrooms room-name) conn)
@@ -176,7 +201,7 @@
 ;; Workflow: Client attempts to connect with a given name, if that name
 ;; is available they go through, if it is not, they are rejected
 (defn connect-handler [req room-name user-name]
-  (println room-name user-name @site)
+  (println "connect" room-name user-name @site)
   (cond
     (not (and room-name user-name))
     (json-bad-request

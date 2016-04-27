@@ -31,7 +31,8 @@
 
 (defn upsert-user [{users :users :as room} username]
   (let [new-coord (tenney/next-coord (map :coord (vals users)))]
-    (assoc-in room [:users username] {:coord new-coord})))
+    (assoc-in room [:users username] {:coord new-coord
+                                      :ping-time (clj-time.core/now)})))
 
 (defn update-ping [user]
   (assoc user :ping-time (clj-time.core/now)))

@@ -63,7 +63,7 @@ exports.audioPrompt = function (app, enableCallback, cancelCallback) {
             m("div.buttonRow",
               [m("button.button",
                  { onclick: function () { enableCallback(); },
-                   config: Touch.touchHelper({ tap: function(){enableCallback();} })
+                   config: Touch.touchHelper({ tap: function (){enableCallback();} })
                  },
                  "Enable"),
                m("button.button",
@@ -75,7 +75,7 @@ exports.audioPrompt = function (app, enableCallback, cancelCallback) {
 
 exports.onTheFlyJoin = function (app, clickCallback) {
   return m("div#roomFormHolder.interactionHolder",
-           [common.textInput("User name:", "userName", app.room.user),
+           [common.textInput("User name:", "userName", app.room.user, true),
             m("br"),
             common.button("Join", "#connect", function () {
               clickCallback(); })]);

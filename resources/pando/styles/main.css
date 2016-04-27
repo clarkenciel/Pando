@@ -150,7 +150,7 @@ input[type=text], textarea {
 }
 
 .message.body {
-    background-color: #222222;
+    /*background-color: #222222;*/
     width:auto;
     display:inline-block;
 }

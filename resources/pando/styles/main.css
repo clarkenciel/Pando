@@ -227,7 +227,7 @@ button, .button {
     color: #000000;
     background-color: #A76E00;
     position:fixed;
-    top:25%;
+    top:15;
     right:0;
     left:0;
     width:auto;
@@ -267,6 +267,10 @@ button, .button {
 
 .bold {
     font-weight:bold;
+}
+
+.red_text {
+    color:#6E0A05;
 }
 
 /* HEIGHT */

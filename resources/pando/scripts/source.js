@@ -584,7 +584,7 @@ var Index = {
             whenObserverValid(room, roomList, function () {
               var dest = '/pando';
               if (room.name()) dest += '/' + room.name();
-              if (room.user()) dest += '/' + room.user();
+              if (room.user()) dest += '/' + room.user();              
               Room.connect(App.room, dest);
             });
           });

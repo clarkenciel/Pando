@@ -21,7 +21,10 @@ exports.renderMessage = function (thisUser, roomName) {
 };
 
 exports.participantView = function (ctl, formCallback) {
-  return m("div.container",[
+  return m("div.container",[    
+    m("audio#audio",
+      { style: "display:none;",/* autoplay: true, */ loop:true, muted:true, type:'audio/mpeg',
+        src:"/pando/audio/pin_drop.mp3" }),
     m("div#messages", ctl.messages().map(exports.renderMessage(ctl.user(), ctl.name()))),
     m("div#messageForm", [
       m("form", [
@@ -40,7 +43,11 @@ exports.participantView = function (ctl, formCallback) {
 };
 
 exports.observerView = function (ctl) {
-  return m("div#messages", ctl.messages().map(exports.renderMessage(ctl.user(), ctl.name())));
+  return m("div#messages",
+           m("audio#audio",
+             { style: "display:none;", /*autoplay: true,*/ loop:true, muted:true, type:'audio/mpeg',
+               src:"/pando/audio/pin_drop.mp3" }),
+           ctl.messages().map(exports.renderMessage(ctl.user(), ctl.name())));
 };
 
 exports.formView = function (room, roomList, connectCallback) {
@@ -59,10 +66,22 @@ exports.formView = function (room, roomList, connectCallback) {
 
 exports.audioPrompt = function (app, enableCallback, cancelCallback) {
   return m("div.popup.interactionHolder",
-           [m("p.medium_text", "You need to enable web audio to continue"),
+           [m("p.medium_text.bold",
+              "You need to enable web audio to continue"),
+            m("br"),
+            m("p.medium_text",
+              [m("span.bold.red_text", "HEADS UP! "),
+               "Enabling this will play a silent audio track on this page, which will keep"
+               + " your web browser open in the background. You will need to manually close"
+               + " this page, or your browser to stop audio playback."]),
+            m("br"),
             m("div.buttonRow",
               [m("button.button",
-                 { onclick: function () { enableCallback(); },
+                 { onclick: function () {
+                   var audio = document.getElementById('audio');
+                   if (audio) audio.play();
+                   enableCallback();
+                 },
                    config: Touch.touchHelper({ tap: function (){enableCallback();} })
                  },
                  "Enable"),

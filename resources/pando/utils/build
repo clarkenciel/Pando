@@ -3,8 +3,8 @@
 echo "Leaving $(pwd)"
 cd scripts/
 echo "In $(pwd): Building js files"
-#browserify source.js -d | minify --js > main.min.js
-browserify source.js -d -o main.js
+browserify source.js -d | minify --js > main.min.js
+#browserify source.js -d -o main.js
 cd ../styles/
 echo "In $(pwd): Building css files"
 minify main.css > main.min.css

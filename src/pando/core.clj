@@ -111,7 +111,7 @@
                    (site/modify-room
                     s room-name #(rooms/upsert-user % user-name))))]
     (send workers
-          (add-worker :user user-name (* 1000 10) ; every ten seconds
+          (add-worker :user user-name (* 1000 10) ; every five seconds
                       #(fresh-user? @site room-name user-name)
                       #(remove-user! room-name user-name)))
     s))
@@ -142,9 +142,9 @@
 
 (defn update-ping-from-message! [{user-name "userName" room-name "roomName" :as message}]
   (do
-    (println 'ping! user-name (get-in @site [:rooms room-name :users user-name :last-ping]))
+    ;;(println 'ping! user-name (get-in @site [:rooms room-name :users user-name :last-ping]))
     (swap! site #(site/update-user-ping % room-name user-name))
-    (println (get-in @site [:rooms room-name :users user-name :last-ping]))
+    ;;(println (get-in @site [:rooms room-name :users user-name :last-ping]))
     message))
 
 (defn ping? [{type "type"}] (= type "ping"))
@@ -212,9 +212,10 @@
         (add-room! room-name))
       exp))
 
-(defn with-user-check [exp room-name user-name]
+(defn with-user-check [exp room-name user-name]  
   (do (when (not (rooms/user-exists? (site/get-room @site room-name) user-name))
-        (add-user! room-name user-name))
+        (add-user! room-name user-name)
+        (println 'new-user (get-in @site [:rooms room-name :users user-name])))      
     exp))
 
 (defn run-checks [exp]  
@@ -224,8 +225,8 @@
 
 ;; Workflow: Client attempts to connect with a given name, if that name
 ;; is available they go through, if it is not, they are rejected
-(defn connect-handler [req room-name user-name]
-  (println "connect" room-name user-name @site)
+(defn connect-handler [req room-name user-name]  
+  (println "connect" room-name user-name)
   (cond
     (not (and room-name user-name))
     (json-bad-request
@@ -253,9 +254,9 @@
          (with-user-check room-name user-name)))))
 
 (defn remove-user-handler [req]
-  (println "remove user" req)
   (let [user-name  (get-in req [:body "user-name"])
         room-name  (get-in req [:body "room-name"])]
+    (println "remove user" room-name user-name)
     (when (and user-name room-name)
       (remove-user! room-name user-name))
     (json-success-response {:message "user removed"})))
@@ -280,9 +281,10 @@
         :dimensions (:dimensions room)}))))
 
 (defn get-user-info-handler [room-name user-name]
+  (println "user info" user-name)
   (with-room room-name
     (fn [room]
-      (let [user (rooms/get-user room user-name)]
+      (let [user (rooms/get-user room user-name)]        
         (json-success-response
          {:fundamental (:root room)
           :coord       (:coord user)

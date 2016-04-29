@@ -274,30 +274,34 @@
 
 (defn list-users-handler [room-name]
   (with-room room-name
-    (fn [room]      
-      (json-success-response
-       {:users (get room :users [])
-        :root  (:root room)
-        :dimensions (:dimensions room)}))))
+    (fn [room]
+      (json-success-response (room/list-users room)))))
 
+;; TODO: rework this to only get info about user. add endpoint for room info
 (defn get-user-info-handler [room-name user-name]
   (println "user info" user-name)
   (with-room room-name
     (fn [room]
       (let [user (rooms/get-user room user-name)]        
-        (json-success-response
-         {:fundamental (:root room)
-          :coord       (:coord user)
-          :dimensions  (:dimensions room)})))))
+        (json-success-response user)))))
+
+(defn get-room-info-handler [room-name]
+  (println "room info" room-name)
+  (with-room room-name
+    (fn [room]
+      (let [room (dissoc (site/get-room @site room-name) :users)]
+        (json-success-response room)))))
 
 ;;; ROUTES
 
 (def room-routes
   (context "/pando/api/rooms" []
            (GET "/list" req (list-rooms-handler req))
+           (GET "/info/room/:room-name" [room-name]
+                (get-room-info-handler room-name))
            (GET "/info/users/:room-name" [room-name]
                 (list-users-handler room-name))
-           (GET "/info/:room-name/:user-name" [room-name user-name]
+           (GET "/info/user/:room-name/:user-name" [room-name user-name]
                 (get-user-info-handler room-name user-name))))
 
 (def routes

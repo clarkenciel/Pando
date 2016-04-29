@@ -70,11 +70,11 @@ var Room = function (roomName, userName) {
 
 var RoomList = function () {
   var self = this;
-  this.data = m.request({ method: "GET", url: "/pando/api/rooms/list" }).
+  m.request({ method: "GET", url: "/pando/api/rooms/list" }).
     then(function (data) {
       return {
-        count: data.roomCount,
-        list: data.rooms
+        count: self.data.roomCount,
+        list: self.data.rooms
       };
     });
 };

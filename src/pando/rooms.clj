@@ -10,9 +10,11 @@
    :users {}
    :dimensions dimensions})
 
-(defn get-user [{users :users} username]
-  (when-let [coord (get users username)]
-    {:userName username :coord (get-in users [username :coord])}))
+(defn get-user [{:keys [users root dimensions]} username]
+  (when-let [{coord :coord} (get users username)]
+    {:userName username
+     :coord coord
+     :frequency (tenney/coord->freq root dimensions coord)}))
 
 (defn user-exists? [{users :users} username]
   (contains? users username))
@@ -23,8 +25,12 @@
 (defn get-coords [{users :users}]
   (vals users))
 
-(defn list-usernames [{users :users}]
-  (keys users))
+(defn list-users [{:keys users root dimensions}]
+  (let [convert (partial tenney/coord->freq root dimensions)]
+    (map
+     (fn [[uname {coord :coord}]]
+       {:userName uname :coord coord :frequency (convert coord)})
+     users)))
 
 (defn user-count [{users :users}]
   (reduce (fn [acc _] (inc acc)) 0 users))

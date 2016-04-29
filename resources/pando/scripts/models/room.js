@@ -1,19 +1,24 @@
 var m = require('../mithril/mithril');
 var X = module.exports = {};
 
-// message
-X.messageHandler = function (room, callback) {
-  return function (message) {
-    var messages, messageData = JSON.parse(message.data);
+X.room = function (data) {
+  this.name = m.prop(data['room-name']);
+  this.dimensions = m.prop(data.dimensions);
+  this.root = m.prop(data.root);
+};
 
-    if (dat.type == 'message')
-      room.messages().push(messageData);
-    else
-      console.log('pingback!');
-    m.redraw();
-    
-    messages = document.getElementById("messages");
-    messages.scrollTop = messages.scrollHeight;
-    if (callback) callback(messageData);
-  };
+X.get = function (roomName) {
+  return m.request({
+    method: "GET",
+    url: '/pando/api/rooms/info/room/'+roomName,
+    type: X.room
+  });
+};
+
+X.list = function () {
+  return m.request({
+    method: "GET",
+    url: "/pando/api/rooms/list",
+    type: X.room
+  });
 };

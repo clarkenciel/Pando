@@ -249,7 +249,13 @@ Room.connect = function (room, destination) {
 
   App.socket.onclose = function (e) {
     console.log("closing socket", e);
-    App.socket = null;
+    try {
+      Room.quit(App.room);
+    }
+    catch (e) { console.log('closing error', e); }
+    finally {
+      App.socket = null;
+    }
   };
   
   App.socket.onopen = function (x) {

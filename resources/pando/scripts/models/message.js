@@ -21,9 +21,8 @@ X.listHandler = function (list, callBack) {
   return function (message) {
     var messages, messageData = JSON.parse(message.data);
 
-    if (messageData.type == 'message') {
-      var user = 
-      list.messages().push(new X.message(messageData.userName, );
+    if (messageData.type == 'message')      
+      list.messages().push();
     else
       console.log('pingback!');
     m.redraw();

@@ -141,10 +141,8 @@
       (assoc message "newRoot" root))))
 
 (defn update-ping-from-message! [{user-name "userName" room-name "roomName" :as message}]
-  (do
-    ;;(println 'ping! user-name (get-in @site [:rooms room-name :users user-name :last-ping]))
+  (do    
     (swap! site #(site/update-user-ping % room-name user-name))
-    ;;(println (get-in @site [:rooms room-name :users user-name :last-ping]))
     message))
 
 (defn ping? [{type "type"}] (= type "ping"))

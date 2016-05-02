@@ -43,7 +43,7 @@
   [site room-name user-name]
   (let [last-ping (get-in site [:rooms room-name :users user-name :last-ping])]
     (time/after? last-ping
-                  (time/minus (time/now) (time/minutes 1)))))
+                  (time/minus (time/now) (time/seconds 3)))))
 
 (defn room-valid?
   "Does the room have at least one member?"
@@ -140,14 +140,14 @@
     (let [{root :root}  (site/get-room room-name (shift-room! room-name freq))]
       (assoc message "newRoot" root))))
 
+(defn ping? [{type "type"}] (= type "ping"))
+
 (defn update-ping-from-message! [{user-name "userName" room-name "roomName" :as message}]
   (do
-    ;;(println 'ping! user-name (get-in @site [:rooms room-name :users user-name :last-ping]))
-    (swap! site #(site/update-user-ping % room-name user-name))
-    ;;(println (get-in @site [:rooms room-name :users user-name :last-ping]))
+    (when (ping? message)
+      (println "ping!" user-name room-name)
+      (swap! site #(site/update-user-ping % room-name user-name)))
     message))
-
-(defn ping? [{type "type"}] (= type "ping"))
 
 (def decode (map chesh/decode))
 
@@ -167,6 +167,7 @@
                  #(bus/publish! chatrooms room-name
                                 (chesh/generate-string
                                  {:userName room-name
+                                  :leavingUser user-name
                                   :type "message"
                                   :message (str user-name " has left... :(")})))
     
@@ -183,6 +184,7 @@
     (bus/publish! chatrooms room-name
                   (chesh/generate-string
                    {:userName room-name
+                    :joiningUser user-name
                     :type "message"
                     :message (str user-name " has joined!")}))))
 
@@ -196,13 +198,14 @@
          params)))
 
 (defn with-room [room-name f]
+  (println "with-room: " room-name)
   (if-let [room (get-in @site [:rooms room-name])]    
     (f room)      
     (json-bad-request
      {:message (str room-name " does not exist!")})))
 
 (defn with-websocket-check [exp req]
-  (d/let-flow [conn (d/catch (http/websocket-connection req) (fn [_] nil))]
+  (d/let-flow [conn (d/catch (http/websocket-connection req) (fn [_] nil))]    
     (if-not conn      
       #'json-non-websocket-response)
       #(exp conn)))
@@ -241,7 +244,7 @@
     (json-bad-request
      {:message "You can only observe a room with at least one member."})
 
-    (is-observer? user-name) 
+    (is-observer? user-name)     
     (run-checks
      (-> #(s/connect (bus/subscribe chatrooms room-name) %)
          (with-websocket-check req)))
@@ -276,7 +279,7 @@
   (with-room room-name
     (fn [room]      
       (json-success-response
-       {:users (get room :users [])
+       {:users (rooms/list-users room)
         :root  (:root room)
         :dimensions (:dimensions room)}))))
 

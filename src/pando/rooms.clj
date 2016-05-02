@@ -14,6 +14,12 @@
   (when-let [coord (get users username)]
     {:userName username :coord (get-in users [username :coord])}))
 
+(defn list-users [{:keys [users root dimensions]}]
+  (map (fn [[k {:keys [coord last-ping] :as u}]]
+         (println root dimensions k coord last-ping)
+         {:userName k :frequency (tenney/coord->freq root dimensions coord)})
+       users))
+
 (defn user-exists? [{users :users} username]
   (contains? users username))
 

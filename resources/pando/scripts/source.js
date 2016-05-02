@@ -297,7 +297,9 @@ Room.sendMessage = function (app) {
             "message": message,
             "userName": app.room.user,
             "roomName": app.room.name,
-            "frequency": 0,
+            "frequency": ST.coordToFrequency(app.room.freq(),
+                                             app.room.dimensions(),
+                                             app.room.coord()),
             "coord": app.room.coord
           });
       app.socket.send(out);

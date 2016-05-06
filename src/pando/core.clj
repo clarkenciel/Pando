@@ -1,3 +1,4 @@
+
 (ns pando.core
   (:gen-class)
   (:require
@@ -157,7 +158,9 @@
 
 (def shift! (map shift-room-from-message!))
 
-(def encode (map chesh/generate-string))
+(def encode (map (fn [x]
+                   (println x)
+                   (chesh/generate-string x))))
 
 (defn connect! [room-name user-name]
   (fn [conn]
